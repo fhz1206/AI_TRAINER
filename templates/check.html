@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型测试平台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* 测试页专属样式 */
+        .check-layout {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 24px;
+            margin-top: 20px;
+        }
+        @media (max-width: 1200px) {
+            .check-layout {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 900px) {
+            .check-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .left-col, .right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* ==================== 代码编辑器（带行号+语法高亮） ==================== */
+        .editor-wrapper {
+            position: relative;
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #1e1e1e;
+            transition: border-color 0.2s;
+        }
+        .editor-wrapper:focus-within {
+            border-color: var(--accent);
+        }
+        .editor-container {
+            display: flex;
+            min-height: 420px;
+            max-height: 60vh;
+        }
+        /* 行号栏 */
+        .line-numbers {
+            flex-shrink: 0;
+            width: 52px;
+            padding: 16px 8px 16px 12px;
+            background: #1a1a2e;
+            color: #858585;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            text-align: right;
+            user-select: none;
+            overflow: hidden;
+            border-right: 1px solid rgba(255,255,255,0.06);
+        }
+        /* 语法高亮层 */
+        .highlight-layer {
+            position: absolute;
+            top: 0;
+            left: 52px;
+            right: 0;
+            bottom: 0;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            overflow-x: hidden;
+            color: #e0e0e0;
+            pointer-events: none;
+            tab-size: 4;
+        }
+        /* textarea 输入层 */
+        .code-editor {
+            position: relative;
+            width: 100%;
+            min-height: 420px;
+            max-height: 60vh;
+            background: transparent;
+            color: #e0e0e0;
+            border: none;
+            border-radius: 0;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            tab-size: 4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-text-fill-color: transparent;
+            caret-color: #ffffff;
+            z-index: 1;
+        }
+        .code-editor::selection {
+            background: rgba(99, 102, 241, 0.4);
+            -webkit-text-fill-color: #ffffff;
+        }
+
+        /* ==================== 语法高亮颜色（高亮版） ==================== */
+        .hl-keyword { color: #ff79c6; }       /* 关键字：亮粉 */
+        .hl-builtin { color: #50fa7b; }       /* 内置函数：亮绿 */
+        .hl-string  { color: #ffb86c; }       /* 字符串：亮橙 */
+        .hl-comment { color: #8be9fd; font-style: italic; }  /* 注释：亮青 */
+        .hl-number  { color: #bd93f9; }       /* 数字：亮紫 */
+        .hl-decorator { color: #f1fa8c; }     /* 装饰器：亮黄 */
+        .hl-funcall { color: #f1fa8c; }       /* 函数调用：亮黄 */
+        .hl-self    { color: #8be9fd; }       /* self：亮青 */
+        .hl-operator { color: #ff79c6; }      /* 运算符：亮粉 */
+        .hl-punctuation { color: #e0e0e0; }   /* 括号、冒号：亮白 */
+
+        .upload-tip-test {
+            background: var(--bg-secondary);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .test-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .btn-run {
+            padding: 10px 24px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-run:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .btn-run:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            padding: 10px 24px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+        .result-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 420px;
+            max-height: 60vh;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .result-success {
+            color: #22c55e;
+        }
+        .result-error {
+            color: #ef4444;
+        }
+        .result-info {
+            color: #3b82f6;
+        }
+        .form-select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+        .form-select:focus {
+            border-color: var(--accent);
+        }
+        .selected-file {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-secondary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .selected-file .remove-file {
+            color: #ef4444;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .selected-file .remove-file:hover {
+            background: #fecaca;
+        }
+        /* 修复上传区域纵向排列 */
+        #testUploadCard .upload-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .upload-zone.drag-over {
+            border-color: var(--accent) !important;
+            background: rgba(59, 130, 246, 0.05) !important;
+            transform: scale(1.01);
+        }
+        .upload-zone {
+            transition: all 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- 头部（和ITPP.html一致） -->
+        <header class="app-header">
+            <div class="header-glow"></div>
+            <h1>🧪 模型测试平台</h1>
+            <p class="subtitle">选择模型和测试数据，自定义测试逻辑验证效果</p>
+            <div class="user-info">
+                <span class="username" id="headerUsername">{{ username }}</span>
+                <a href="/" class="btn-test" title="返回训练平台">🏠 训练平台</a>
+                <button class="btn-logout" onclick="handleLogout()" title="退出登录">
+                    🚪 退出
+                </button>
+            </div>
+        </header>
+
+        <!-- 顶部控制栏：框架选择+模型选择 -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="form-group" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <div>
+                    <label style="margin-right: 8px;">模型框架：</label>
+                    <select id="frameworkSelect" class="form-select" onchange="onFrameworkChange()">
+                        <option value="image">CNN 图片模型</option>
+                        <option value="text">Transformer 文本模型</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="margin-right: 8px;">选择模型：</label>
+                    <select id="modelSelect" class="form-select">
+                        <option value="">请先选择框架</option>
+                    </select>
+                    <button class="btn-secondary" style="padding: 4px 12px; margin-left: 8px; font-size: 13px;" onclick="loadModels()">🔄 刷新</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主体布局：左代码+上传，右结果 -->
+        <div class="check-layout">
+            <!-- 左侧列 -->
+            <div class="left-col">
+                <!-- 代码编辑区 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="icon">💻</span>
+                        <h3>测试代码（支持自定义修改）</h3>
+                        <button class="btn-secondary" style="padding: 4px 10px; font-size: 12px; margin-left: auto;" onclick="resetCode()">↺ 恢复默认模板</button>
+                    </div>
+                    <div class="editor-wrapper">
+                        <div class="editor-container">
+                            <div class="line-numbers" id="lineNumbers">1</div>
+                            <textarea id="testCode" class="code-editor" spellcheck="false"></textarea>
+                        </div>
+                        <div class="highlight-layer" id="highlightLayer"></div>
+                    </div>
+                    <div class="test-actions">
+                        <button class="btn-run" id="runBtn" onclick="runTest()">▶️ 运行测试</button>
+                        <button class="btn-secondary" onclick="clearResult()">🗑️ 清空结果</button>
+                    </div>
+                </div>
+
+                <!-- 测试数据上传区（文本框架下自动隐藏） -->
+                <div class="card" id="testUploadCard">
+                    <div class="card-header">
+                        <span class="icon">📁</span>
+                        <h3>上传测试数据集</h3>
+                        <span class="badge" id="testFileBadge">未上传</span>
+                    </div>
+                    <div class="upload-tip-test" id="testUploadTip">
+                        默认显示CNN图片测试要求，切换框架后自动更新
+                    </div>
+                    <div class="upload-zone" id="testUploadZone">
+                        <div class="upload-icon-wrap">📤</div>
+                        <div class="upload-text">
+                            点击或拖拽上传测试数据集<br>
+                            <small id="testUploadSmall">仅支持 .zip 格式，结构同训练数据集</small>
+                        </div>
+                    </div>
+                    <input type="file" id="testFileInput" style="display:none">
+                    <div class="error-box" id="testErrorBox"></div>
+                    <div id="selectedTestFile"></div>
+                </div>
+            </div>
+
+            <!-- 右侧列：测试结果 -->
+            <div class="right-col">
+                <div class="card" style="height: 100%;">
+                    <div class="card-header">
+                        <span class="icon">📊</span>
+                        <h3>测试结果</h3>
+                        <span class="badge" id="testStatusBadge">等待运行</span>
+                    </div>
+                    <div class="result-area" id="testResult">
+                        <span class="result-info">👋 请先选择模型、上传测试数据，修改测试代码后点击运行</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // 全局状态
+        let currentFramework = 'image';
+        let selectedTestDataPath = null;
+        let isRunning = false;
+
+        // 默认测试代码模板
+        const codeTemplates = {
+            image: `# CNN图片模型测试模板
+import torch
+import os
+from torch.utils.data import DataLoader
+from model import SimpleResNet, ImageDataset
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from PIL import Image
+
+# -------------------------- 可修改参数 --------------------------
+BATCH_SIZE = 32
+IMAGE_SIZE = 224
+# -----------------------------------------------------------------
+
+# 1. 加载模型（自动注入模型路径，无需修改）
+print("正在加载模型...")
+model = torch.load(model_path, map_location='cpu', weights_only=False)
+model.eval()
+print(f"模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+
+# 2. 加载测试数据集（自动注入测试数据路径，无需修改）
+print("\\n正在加载测试数据集...")
+dataset = ImageDataset(test_data_path, image_size=IMAGE_SIZE)
+loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+print(f"测试集共 {len(dataset)} 个样本，{dataset.num_classes} 个类别")
+class_names = list(dataset.classes.keys())  # 类别名映射
+
+# 3. 逐样本输出识别结果
+correct = 0
+total = 0
+all_preds = []
+all_labels = []
+
+print("\\n" + "="*60)
+print("开始逐样本识别，输出所有结果：")
+print("="*60)
+
+with torch.no_grad():
+    for batch_idx, (imgs, labels) in enumerate(loader):
+        outputs = model(imgs)
+        # 计算置信度
+        probs = torch.softmax(outputs, dim=1)
+        confs, preds = probs.max(1)
+        
+        # 遍历当前批次每个样本，输出详情
+        for i in range(len(imgs)):
+            global_idx = batch_idx * BATCH_SIZE + i
+            if global_idx >= len(dataset):
+                break
+            
+            # 获取样本信息
+            img_path = dataset.image_files[global_idx]
+            filename = os.path.basename(img_path)
+            true_label = labels[i].item()
+            pred_label = preds[i].item()
+            true_cls = class_names[true_label] if true_label < len(class_names) else f"未知{true_label}"
+            pred_cls = class_names[pred_label] if pred_label < len(class_names) else f"未知{pred_label}"
+            conf = confs[i].item() * 100
+            mark = "✅" if true_label == pred_label else "❌"
+            
+            # 输出单样本结果
+            print(f"{mark} 文件: {filename:<30} | 真实: {true_cls:<10} | 预测: {pred_cls:<10} | 置信度: {conf:.2f}%")
+            
+            # 统计指标
+            total += 1
+            if true_label == pred_label:
+                correct += 1
+            all_preds.append(pred_label)
+            all_labels.append(true_label)
+        
+        # 每10批次打印一次进度
+        if batch_idx % 10 == 0:
+            cur_acc = 100. * correct / total if total>0 else 0
+            print(f"\\n--- 已处理 {batch_idx+1}/{len(loader)} 批次，当前准确率: {cur_acc:.2f}% ---\\n")
+
+# 4. 输出最终统计
+accuracy = 100. * correct / total
+print("\\n" + "="*60)
+print(f"✅ 测试完成")
+print(f"总样本数: {total}")
+print(f"正确数: {correct}")
+print(f"错误数: {total - correct}")
+print(f"准确率: {accuracy:.2f}%")
+print("="*60)
+# 保留固定格式，方便后端解析指标
+print(f"准确率：{accuracy:.2f}%")`,
+text: `# Transformer生成式文本模型测试模板（修复版，适配删除MoE后的模型）
+import torch
+import math
+import os
+from model import TextTransformerModel, TextDataset
+
+# -------------------------- 可修改参数（必须用英文引号""，不要用中文引号） --------------------------
+BATCH_SIZE = 8          # 生成批次大小
+MAX_NEW_TOKENS = 20     # 测试时先设小一点，确认有输出再调大
+TEMPERATURE = 1.0       # 测试时先设1.0，关闭随机性
+TOP_K = 0               # 测试时先关闭top_k过滤
+PROMPT = "今天天气真"   # 测试生成用的起始文本，可随意修改
+# -----------------------------------------------------------------
+
+# 1. 加载模型（自动注入，无需修改）
+print("正在加载模型...")
+try:
+    model = torch.load(model_path, map_location='cpu', weights_only=False)
+    model.eval()
+    print(f"✅ 模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"模型配置: vocab_size={model.vocab_size}, max_seq_len={model.max_seq_len}, MoE={model.use_moe}, MLA={model.use_mla}")
+except Exception as e:
+    print(f"❌ 模型加载失败：{str(e)}")
+    print("请检查：1. model_path是否正确 2. 模型是否是用当前model.py训练的 3. 模型文件是否损坏")
+    exit()
+
+# 2. 加载训练时保存的词表（必须和训练时的TextDataset分词逻辑完全一致）
+#    训练时TextDataset会将词表保存为 {数据目录}_token2char.pth
+char2token = None
+token2char = None
+
+# 尝试从模型metadata中获取训练数据路径，进而找到词表文件
+vocab_loaded = False
+try:
+    if hasattr(model, '_metadata') and isinstance(model._metadata, dict):
+        train_params = model._metadata.get('train_params', {})
+        data_path = train_params.get('data_path', '')
+        if data_path:
+            vocab_path = data_path.rstrip('/') + '_token2char.pth'
+            if os.path.exists(vocab_path):
+                token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
+                char2token = {char: idx for idx, char in token2char.items()}
+                vocab_loaded = True
+                print(f"✅ 词表加载成功（来自训练数据目录），词表大小: {len(token2char)}")
+except Exception as e:
+    print(f"⚠️ 从metadata加载词表失败: {e}")
+
+# 如果metadata方式失败，尝试从模型同目录的checkpoint中查找词表
+if not vocab_loaded:
+    try:
+        model_dir = os.path.dirname(model_path)
+        # 搜索模型目录下所有checkpoint子目录
+        for item in os.listdir(model_dir):
+            if item.startswith('checkpoints_'):
+                ckpt_dir = os.path.join(model_dir, item)
+                if os.path.isdir(ckpt_dir):
+                    # 在checkpoint目录中查找词表文件
+                    for root, dirs, files in os.walk(ckpt_dir):
+                        for f in files:
+                            if f.endswith('_token2char.pth'):
+                                vocab_path = os.path.join(root, f)
+                                token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
+                                char2token = {char: idx for idx, char in token2char.items()}
+                                vocab_loaded = True
+                                print(f"✅ 词表加载成功（来自checkpoint目录），词表大小: {len(token2char)}")
+                                break
+                        if vocab_loaded:
+                            break
+                if vocab_loaded:
+                    break
+    except Exception as e:
+        print(f"⚠️ 从checkpoint目录加载词表失败: {e}")
+
+# 最后尝试：在uploads目录下搜索词表文件
+if not vocab_loaded:
+    try:
+        uploads_dir = 'uploads'
+        if os.path.exists(uploads_dir):
+            for root, dirs, files in os.walk(uploads_dir):
+                for f in files:
+                    if f.endswith('_token2char.pth'):
+                        vocab_path = os.path.join(root, f)
+                        token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
+                        char2token = {char: idx for idx, char in token2char.items()}
+                        vocab_loaded = True
+                        print(f"✅ 词表加载成功（来自uploads目录），词表大小: {len(token2char)}")
+                        break
+                if vocab_loaded:
+                    break
+    except Exception as e:
+        print(f"⚠️ 从uploads目录加载词表失败: {e}")
+
+if not vocab_loaded:
+    print("❌ 无法加载训练词表！生成结果将无法正确解码为文字")
+    print("请确保训练数据目录下存在词表文件（*_token2char.pth）")
+
+# 3. 分词/反分词函数（必须和训练时的TextDataset分词逻辑完全一致）
+def tokenize(text, vocab_size, pad_token_id=0):
+    """使用训练时的显式词表进行分词，和TextDataset的char2token映射一致"""
+    if char2token is not None:
+        # 使用训练时保存的显式词表映射（和训练完全一致）
+        unknown_idx = list(char2token.values())[0] if char2token else 0
+        tokens = [char2token.get(char, unknown_idx) for char in text]
+    else:
+        # 兜底：无词表时按字分词，用排序后的字符集映射（和TextDataset初始化逻辑一致）
+        char_set = sorted(set(text))
+        fallback_vocab = {char: idx for idx, char in enumerate(char_set)}
+        unknown_idx = 0
+        tokens = [fallback_vocab.get(char, unknown_idx) for char in text]
+    return torch.tensor(tokens, dtype=torch.long, device='cpu')
+
+def detokenize(token_ids, vocab_size):
+    """使用训练时的显式词表将token ID还原为文字"""
+    if isinstance(token_ids, torch.Tensor):
+        token_ids = token_ids.tolist()
+    if token2char is not None:
+        # 使用训练时保存的显式词表反向映射，还原为可读文字
+        chars = []
+        for tok in token_ids:
+            if tok in token2char:
+                chars.append(token2char[tok])
+            # 跳过pad_token和-100等特殊标记
+        return "".join(chars)
+    else:
+        # 无词表兜底：输出数字标记
+        return " ".join([f"<tok_{tok}>" for tok in token_ids if tok != 0])
+
+# -------------------------- 生成测试 --------------------------
+print("=" * 60)
+print(f"🎯 开始生成测试 | Prompt: {PROMPT}")
+print(f"生成参数: 温度={TEMPERATURE}, top_k={TOP_K}, 最大生成长度={MAX_NEW_TOKENS}")
+print("=" * 60)
+
+prompt_ids = tokenize(PROMPT, model.vocab_size, model.pad_token_id).unsqueeze(0)
+# 长度截断，避免超过模型最大长度
+if prompt_ids.size(1) > model.max_seq_len:
+    prompt_ids = prompt_ids[:, -model.max_seq_len:]
+    print(f"⚠️ Prompt长度超过模型最大长度{model.max_seq_len}，已自动截断到后{model.max_seq_len}个token")
+print(f"Prompt转Token结果: {detokenize(prompt_ids[0], model.vocab_size)}")
+
+with torch.no_grad():
+    try:
+        generated_ids = model.generate(
+            prompt_ids=prompt_ids,
+            max_new_tokens=MAX_NEW_TOKENS,
+            temperature=TEMPERATURE,
+            top_k=TOP_K,
+            pad_token_id=model.pad_token_id,
+            eos_token_id=None
+        )
+    except Exception as e:
+        print(f"❌ 生成失败：{str(e)}")
+        print("请检查：1. 模型参数是否正确 2. 提示词token是否超出词表范围")
+        exit()
+
+# 解码生成结果
+generated_tokens = generated_ids[0][prompt_ids.size(1):]
+generated_text = detokenize(generated_tokens, model.vocab_size)
+full_text = detokenize(generated_ids[0], model.vocab_size)
+
+print(f"原始完整Token序列: {generated_ids[0].tolist()}")
+print(f"✅ 生成结果: {generated_text}")
+print(f"✅ 完整文本（含Prompt）: {full_text}")
+print(f"✅ 生成统计: Prompt长度 {len(prompt_ids[0])} token | 生成长度 {len(generated_tokens)} token | 总长度 {len(generated_ids[0])} token")
+print("=== 测试完成 ===")`};
+
+        // ==================== 语法高亮引擎 ====================
+        const PY_KW = ['import','from','def','class','if','elif','else','for','while','try','except','finally','with','as','return','yield','raise','pass','break','continue','and','or','not','in','is','True','False','None','global','nonlocal','lambda','assert','del','exit'];
+        const PY_BI = ['print','range','len','int','str','float','list','dict','set','tuple','type','isinstance','hasattr','getattr','setattr','sorted','enumerate','zip','map','filter','open','super','abs','max','min','sum','round','format','input','iter','next','any','all','reversed','slice'];
+
+        function escH(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+        function hlLine(line){
+            let r='',i=0;
+            while(i<line.length){
+                if(line[i]==='#'){r+='<span class="hl-comment">'+escH(line.slice(i))+'</span>';return r;}
+                if((line[i]==='"'&&line[i+1]==='"'&&line[i+2]==='"')||(line[i]==="'"&&line[i+1]==="'"&&line[i+2]==="'")){
+                    let q=line[i]==='"'?'"""':"'''",end=line.indexOf(q,i+3);
+                    if(end!==-1){r+='<span class="hl-string">'+escH(line.slice(i,end+3))+'</span>';i=end+3;}
+                    else{r+='<span class="hl-string">'+escH(line.slice(i))+'</span>';return r;}
+                    continue;
+                }
+                if(line[i]==='"'||line[i]==="'"){
+                    let q=line[i],j=i+1;
+                    while(j<line.length&&line[j]!==q){if(line[j]==='\\\\')j++;j++;}
+                    r+='<span class="hl-string">'+escH(line.slice(i,j+1))+'</span>';i=j+1;continue;
+                }
+                if(line[i]==='f'&&(line[i+1]==='"'||line[i+1]==="'")){
+                    let q=line[i+1],j=i+2;
+                    while(j<line.length&&line[j]!==q){if(line[j]==='\\\\')j++;j++;}
+                    r+='<span class="hl-string">f</span><span class="hl-string">'+escH(line.slice(i+1,j+1))+'</span>';i=j+1;continue;
+                }
+                if(line[i]==='@'&&(i===0||/\\s/.test(line[i-1]))){
+                    let j=i+1;while(j<line.length&&/[a-zA-Z0-9_.]/.test(line[j]))j++;
+                    r+='<span class="hl-decorator">'+escH(line.slice(i,j))+'</span>';i=j;continue;
+                }
+                if(/[a-zA-Z_]/.test(line[i])){
+                    let j=i;while(j<line.length&&/[a-zA-Z0-9_]/.test(line[j]))j++;
+                    let w=line.slice(i,j);
+                    if(w==='self')r+='<span class="hl-self">'+w+'</span>';
+                    else if(PY_KW.includes(w))r+='<span class="hl-keyword">'+w+'</span>';
+                    else if(PY_BI.includes(w))r+='<span class="hl-builtin">'+w+'</span>';
+                    else if(j<line.length&&line[j]==='(')r+='<span class="hl-funcall">'+escH(w)+'</span>';
+                    else r+=escH(w);
+                    i=j;continue;
+                }
+                if(/[0-9]/.test(line[i])){
+                    let j=i;while(j<line.length&&/[0-9.eExXoObBaAfF_]/.test(line[j]))j++;
+                    r+='<span class="hl-number">'+escH(line.slice(i,j))+'</span>';i=j;continue;
+                }
+                if('+-*/%=<>!&|^~'.includes(line[i])){r+='<span class="hl-operator">'+escH(line[i])+'</span>';i++;continue;}
+                r+=escH(line[i]);i++;
+            }
+            return r;
+        }
+
+        var NL=String.fromCharCode(10);
+        function hlPy(code){return code.split(NL).map(function(l){return hlLine(l)}).join(NL);}
+
+        function updateLineNumbers(){
+            var ed=document.getElementById('testCode'),ln=document.getElementById('lineNumbers');
+            var n=ed.value.split(NL).length,nums=[];
+            for(var i=1;i<=n;i++)nums.push(i);
+            ln.innerHTML=nums.join('<br>');
+        }
+
+        function updateHighlight(){
+            var ed=document.getElementById('testCode'),hl=document.getElementById('highlightLayer');
+            hl.innerHTML=hlPy(ed.value);
+        }
+
+        function syncScroll(){
+            var ed=document.getElementById('testCode');
+            document.getElementById('lineNumbers').scrollTop=ed.scrollTop;
+            document.getElementById('highlightLayer').scrollTop=ed.scrollTop;
+            document.getElementById('highlightLayer').scrollLeft=ed.scrollLeft;
+        }
+
+        function refreshEditor(){updateLineNumbers();updateHighlight();}
+
+        // 页面初始化（等DOM加载完成后再执行，避免元素为null）
+        document.addEventListener('DOMContentLoaded', () => {
+            // 扩大页面宽度以适配代码编辑器
+            const wrapper = document.querySelector('.app-wrapper');
+            if (wrapper) wrapper.style.maxWidth = '1400px';
+            // 设置默认代码
+            const editor = document.getElementById('testCode');
+            editor.value = codeTemplates[currentFramework];
+            refreshEditor();
+            // 加载模型列表
+            loadModels();
+            // 绑定上传事件
+            bindUploadEvents();
+            // 绑定代码编辑器事件
+            bindCodeEditor();
+            // 初始化上传提示和卡片显示状态
+            updateUploadTip();
+            // 初始化上传卡片显示状态
+            if (currentFramework === 'text') {
+                document.getElementById('testUploadCard').style.display = 'none';
+            }
+        });
+
+        // 框架切换逻辑
+        function onFrameworkChange() {
+            currentFramework = document.getElementById('frameworkSelect').value;
+            // 切换代码模板
+            const editor = document.getElementById('testCode');
+            editor.value = codeTemplates[currentFramework];
+            refreshEditor();
+            // 切换上传提示和卡片显示状态
+            updateUploadTip();
+            // 刷新模型列表
+            loadModels();
+            // 清空已选测试数据
+            selectedTestDataPath = null;
+            document.getElementById('selectedTestFile').innerHTML = '';
+            document.getElementById('testFileBadge').textContent = '未上传';
+        }
+
+        // 更新上传提示（同时控制上传卡片显示隐藏）
+        function updateUploadTip() {
+            const tip = document.getElementById('testUploadTip');
+            const small = document.getElementById('testUploadSmall');
+            const uploadCard = document.getElementById('testUploadCard');
+            if (currentFramework === 'image') {
+                tip.innerHTML = '<strong>📋 图片测试数据集要求</strong><br>仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片，结构同训练数据集';
+                small.textContent = '仅支持 .zip 格式，最大500MB';
+                uploadCard.style.display = 'flex'; // 显示上传卡片
+            } else {
+                tip.innerHTML = '<strong>📋 文本生成测试说明</strong><br>无需上传数据集，直接输入Prompt即可测试生成效果；如需计算困惑度(PPL)可自行修改测试代码加载本地数据';
+                small.textContent = '文本生成测试无需上传数据集';
+                uploadCard.style.display = 'none'; // 隐藏上传卡片
+            }
+        }
+
+        // 加载模型列表
+        async function loadModels() {
+            const framework = document.getElementById('frameworkSelect').value;
+            const select = document.getElementById('modelSelect');
+            try {
+                const res = await fetch(`/api/list_user_models?framework=${framework}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    if (data.models.length === 0) {
+                        select.innerHTML = '<option value="">暂无模型，请先在训练平台训练模型</option>';
+                    } else {
+                        select.innerHTML = data.models.map(m => 
+                            `<option value="${m.name}">${m.name} (${m.size} | ${m.type === 'cnn' ? 'CNN' : 'Transformer'})</option>`
+                        ).join('');
+                    }
+                } else {
+                    select.innerHTML = '<option value="">加载失败</option>';
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">加载失败</option>';
+                console.error('加载模型列表失败:', e);
+            }
+        }
+
+        // 绑定上传事件
+        function bindUploadEvents() {
+            const zone = document.getElementById('testUploadZone');
+            const input = document.getElementById('testFileInput');
+
+            // 点击上传
+            zone.addEventListener('click', () => input.click());
+
+            // 拖拽上传
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                if (e.dataTransfer.files.length > 0) {
+                    handleTestFileSelect(e.dataTransfer.files[0]);
+                }
+            });
+
+            // 文件选择
+            input.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleTestFileSelect(e.target.files[0]);
+                }
+            });
+        }
+
+        // 处理测试文件选择
+        async function handleTestFileSelect(file) {
+            const acceptTypes = currentFramework === 'image' ? ['.zip'] : ['.txt', '.zip'];
+            const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            if (!acceptTypes.includes(fileExt)) {
+                showTestError(`仅支持${acceptTypes.join('/')}格式文件`);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('framework', currentFramework);
+
+            try {
+                const res = await fetch('/api/upload_test_data', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    selectedTestDataPath = data.path;
+                    document.getElementById('testFileBadge').textContent = `${data.file_count} 个文件`;
+                    document.getElementById('selectedTestFile').innerHTML = `
+                        <div class="selected-file">
+                            <span>📄 ${data.filename}</span>
+                            <span class="remove-file" onclick="clearTestFile()">删除</span>
+                        </div>
+                    `;
+                    showTestError('');
+                } else {
+                    showTestError(data.message || '上传失败');
+                }
+            } catch (e) {
+                showTestError('上传失败: ' + e.message);
+            }
+        }
+
+        // 删除已选测试文件
+        function clearTestFile() {
+            selectedTestDataPath = null;
+            document.getElementById('testFileInput').value = '';
+            document.getElementById('selectedTestFile').innerHTML = '';
+            document.getElementById('testFileBadge').textContent = '未上传';
+        }
+
+        // 显示上传错误
+        function showTestError(msg) {
+            const box = document.getElementById('testErrorBox');
+            if (msg) {
+                box.textContent = '❌ ' + msg;
+                box.classList.add('show');
+            } else {
+                box.classList.remove('show');
+            }
+        }
+
+        // 代码编辑器事件绑定（Tab+行号+高亮+滚动同步）
+        function bindCodeEditor() {
+            const editor = document.getElementById('testCode');
+            // Tab缩进
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = editor.selectionStart;
+                    const end = editor.selectionEnd;
+                    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                    editor.selectionStart = editor.selectionEnd = start + 4;
+                    refreshEditor();
+                }
+            });
+            // 输入时刷新行号和高亮
+            editor.addEventListener('input', () => { refreshEditor(); });
+            // 滚动同步
+            editor.addEventListener('scroll', () => { syncScroll(); });
+        }
+
+        // 恢复默认代码模板
+        function resetCode() {
+            const editor = document.getElementById('testCode');
+            editor.value = codeTemplates[currentFramework];
+            refreshEditor();
+        }
+
+        // 清空结果
+        function clearResult() {
+            document.getElementById('testResult').innerHTML = '<span class="result-info">👋 请先选择模型、上传测试数据，修改测试代码后点击运行</span>';
+            document.getElementById('testStatusBadge').textContent = '等待运行';
+            document.getElementById('testStatusBadge').style.background = 'var(--bg-secondary)';
+        }
+
+        // 运行测试
+        async function runTest() {
+            if (isRunning) return;
+            
+            // 校验参数
+            const modelName = document.getElementById('modelSelect').value;
+            const testCode = document.getElementById('testCode').value.trim();
+            if (!modelName) {
+                alert('请先选择要测试的模型');
+                return;
+            }
+            // 修改：仅图片框架需要校验上传测试数据，文本框架不需要
+            if (currentFramework === 'image' && !selectedTestDataPath) {
+                alert('请先上传测试数据集');
+                return;
+            }
+            if (!testCode) {
+                alert('测试代码不能为空');
+                return;
+            }
+
+            // 锁定按钮
+            isRunning = true;
+            const runBtn = document.getElementById('runBtn');
+            runBtn.disabled = true;
+            runBtn.textContent = '⏳ 运行中...';
+            
+            // 更新状态
+            const resultArea = document.getElementById('testResult');
+            const statusBadge = document.getElementById('testStatusBadge');
+            resultArea.innerHTML = '<span class="result-info">🔄 正在运行测试，请稍候...</span>';
+            statusBadge.textContent = '运行中';
+            statusBadge.style.background = 'var(--accent)';
+
+            try {
+                const res = await fetch('/api/run_test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        framework: currentFramework,
+                        model_name: modelName,
+                        test_code: testCode,
+                        // 文本框架下传空路径即可，后端已做兼容
+                        test_data_path: selectedTestDataPath || ''
+                    })
+                });
+                const data = await res.json();
+
+                // 渲染结果
+                let resultHtml = '';
+                if (data.status === 'success') {
+                    resultHtml = `<span class="result-success">✅ 测试成功</span>\n\n`;
+                    statusBadge.textContent = '成功';
+                    statusBadge.style.background = '#22c55e';
+                } else {
+                    resultHtml = `<span class="result-error">❌ 测试失败</span>\n`;
+                    if (data.error) resultHtml += `<span class="result-error">错误信息:\n${data.error}</span>\n\n`;
+                    statusBadge.textContent = '失败';
+                    statusBadge.style.background = '#ef4444';
+                }
+                
+                // 添加输出日志
+                resultHtml += `<span class="result-info">---------- 运行日志 ----------</span>\n`;
+                resultHtml += data.output || '无输出';
+                
+                // 添加指标
+                if (data.metrics && Object.keys(data.metrics).length > 0) {
+                    resultHtml += `\n\n<span class="result-info">---------- 测试指标 ----------</span>\n`;
+                    for (const [key, value] of Object.entries(data.metrics)) {
+                        resultHtml += `${key}: ${value}\n`;
+                    }
+                }
+                
+                resultArea.innerHTML = resultHtml;
+            } catch (e) {
+                resultArea.innerHTML = `<span class="result-error">❌ 请求失败: ${e.message}</span>`;
+                statusBadge.textContent = '失败';
+                statusBadge.style.background = '#ef4444';
+            } finally {
+                // 解锁按钮
+                isRunning = false;
+                runBtn.disabled = false;
+                runBtn.textContent = '▶️ 运行测试';
+            }
+        }
+
+        // 退出登录（和ITPP.html共用逻辑）
+        async function handleLogout() {
+            if (!confirm('确定要退出登录吗？')) return;
+            try {
+                const res = await fetch('/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    window.location.href = '/login';
+                } else {
+                    alert('退出失败: ' + data.message);
+                }
+            } catch (e) {
+                alert('退出失败: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
