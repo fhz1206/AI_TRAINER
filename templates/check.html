@@ -9,7 +9,41 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
-        /* 测试页专属样式 */
+        /* 原有样式完全保留，新增手部检测专属样式 */
+        .hand-result-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #d4d4d4;
+            font-size: 13px;
+            margin-top: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: block;
+        }
+        .hand-result-table th, .hand-result-table td {
+            border: 1px solid #444;
+            padding: 6px 8px;
+            text-align: left;
+            min-width: 80px;
+        }
+        .hand-result-table th {
+            background: #2d2d2d;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+        .hand-result-table tr:nth-child(even) {
+            background: rgba(255,255,255,0.02);
+        }
+        .hand-img {
+            max-width: 100%;
+            border-radius: 6px;
+            margin-top: 8px;
+            border: 1px solid #444;
+            max-height: 400px;
+            object-fit: contain;
+        }
+        /* 原有样式完全保留 */
         .check-layout {
             display: grid;
             grid-template-columns: 3fr 2fr;
@@ -207,6 +241,10 @@
         .form-select:focus {
             border-color: var(--accent);
         }
+        .form-select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .selected-file {
             display: flex;
             align-items: center;
@@ -226,7 +264,6 @@
         .selected-file .remove-file:hover {
             background: #fecaca;
         }
-        /* 修复上传区域纵向排列 */
         #testUploadCard .upload-zone {
             display: flex;
             flex-direction: column;
@@ -263,9 +300,11 @@
             <div class="form-group" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
                 <div>
                     <label style="margin-right: 8px;">模型框架：</label>
+                    <!-- 新增head_mode框架选项 -->
                     <select id="frameworkSelect" class="form-select" onchange="onFrameworkChange()">
                         <option value="image">CNN 图片模型</option>
                         <option value="text">Transformer 文本模型</option>
+                        <option value="head_mode">✋ 手部关键点检测</option>
                     </select>
                 </div>
                 <div>
@@ -348,7 +387,7 @@
         let selectedTestDataPath = null;
         let isRunning = false;
 
-        // 默认测试代码模板
+        // 默认测试代码模板（新增head_mode完整检测逻辑）
         const codeTemplates = {
             image: `# CNN图片模型测试模板
 import torch
@@ -599,7 +638,126 @@ print(f"原始完整Token序列: {generated_ids[0].tolist()}")
 print(f"✅ 生成结果: {generated_text}")
 print(f"✅ 完整文本（含Prompt）: {full_text}")
 print(f"✅ 生成统计: Prompt长度 {len(prompt_ids[0])} token | 生成长度 {len(generated_tokens)} token | 总长度 {len(generated_ids[0])} token")
-print("=== 测试完成 ===")`};
+print("=== 测试完成 ===")`,
+            // 新增head_mode完整检测代码模板，直接运行即可出结果
+            head_mode: `# 手部关键点检测（官方Tasks API标准写法，上传图片直接运行）
+import cv2
+import numpy as np
+import base64
+import mediapipe as mp
+
+# -------------------------- 初始化内置模型（自动加载，无需修改） --------------------------
+print("正在加载内置手部检测模型...")
+try:
+    if '_global_hand_models' not in globals() or _global_hand_models is None:
+        _global_hand_models = _init_hand_models()
+    detector = _global_hand_models
+    if detector is None:
+        raise RuntimeError("模型初始化返回空值")
+    print("✅ 模型加载完成")
+except Exception as e:
+    raise RuntimeError(f"模型加载失败：{str(e)}")
+
+# -------------------------- 手部检测逻辑（官方Tasks API标准调用） --------------------------
+img_path = test_data_path
+print(f"正在读取测试图片：{img_path}")
+img = cv2.imread(img_path)
+if img is None:
+    raise ValueError(f"无法读取图片：{img_path}，请检查文件是否损坏")
+img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+h, w = img.shape[:2]
+
+# 执行手部检测
+print("正在检测手部关键点...")
+if detector is None:
+    raise RuntimeError("手部检测模型未成功加载，请检查后端环境")
+mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
+results = detector.detect(mp_image)
+
+# 处理检测结果
+if not results.hand_landmarks:
+    print("❌ 未检测到手部，请上传清晰的手部照片（正面、背景简洁、手部无遮挡）")
+    _hand_detection_result = {
+        'error': '未检测到手部',
+        'message': '未检测到手部，请上传清晰的手部照片（正面、背景简洁、手部无遮挡）'
+    }
+else:
+    # 提取21个关键点，转像素坐标
+    hand_landmarks = results.hand_landmarks[0]
+    keypoints = []
+    for lm in hand_landmarks:
+        x = int(lm.x * w)
+        y = int(lm.y * h)
+        conf = 1.0
+        keypoints.append([x, y, conf])
+    keypoints = np.array(keypoints, dtype=np.float32)
+
+    # 关键点名称
+    keypoint_names = ["手腕", "大拇指根部", "大拇指第一关节", "大拇指第二关节", "大拇指指尖",
+                      "食指根部", "食指第一关节", "食指第二关节", "食指指尖",
+                      "中指根部", "中指第一关节", "中指第二关节", "中指指尖",
+                      "无名指根部", "无名指第一关节", "无名指第二关节", "无名指指尖",
+                      "小指根部", "小指第一关节", "小指第二关节", "小指指尖"]
+
+    print("\\n=== 手部关键点检测结果 ===")
+    keypoint_list = []
+    for idx, (x, y, conf) in enumerate(keypoints):
+        print(f"关键点{idx}（{keypoint_names[idx]}）：x={int(x)}, y={int(y)}, 置信度={float(conf):.4f}")
+        keypoint_list.append({
+            'id': idx,
+            'name': keypoint_names[idx],
+            'x': int(x),
+            'y': int(y),
+            # 🛠️ 修复：转成原生float，确保JSON能序列化
+            'confidence': float(conf)
+        })
+
+    # 生成基础标注图
+    basic_img = img_rgb.copy()
+    for idx, (x, y, conf) in enumerate(keypoints):
+        if conf > 0.5:
+            cv2.circle(basic_img, (int(x), int(y)), 5, (0, 255, 0), -1)
+            cv2.putText(basic_img, str(idx), (int(x)+10, int(y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 1)
+    _, basic_buffer = cv2.imencode('.jpg', cv2.cvtColor(basic_img, cv2.COLOR_RGB2BGR))
+    basic_base64 = base64.b64encode(basic_buffer).decode('utf-8')
+
+    # 生成彩色骨架图
+    HAND_CONNECTIONS = [
+        (0,1),(1,2),(2,3),(3,4), (0,5),(5,6),(6,7),(7,8),
+        (0,9),(9,10),(10,11),(11,12), (0,13),(13,14),(14,15),(15,16),
+        (0,17),(17,18),(18,19),(19,20), (5,9),(9,13),(13,17)
+    ]
+    CONNECTION_COLORS = {
+        (0,1):(255,165,0), (1,2):(255,165,0), (2,3):(255,165,0), (3,4):(255,165,0),
+        (0,5):(0,255,0), (5,6):(0,255,0), (6,7):(0,255,0), (7,8):(0,255,0),
+        (0,9):(0,0,255), (9,10):(0,0,255), (10,11):(0,0,255), (11,12):(0,0,255),
+        (0,13):(128,0,128), (13,14):(128,0,128), (14,15):(128,0,128), (15,16):(128,0,128),
+        (0,17):(255,0,0), (17,18):(255,0,0), (18,19):(255,0,0), (19,20):(255,0,0),
+        (5,9):(255,255,0), (9,13):(255,255,0), (13,17):(255,255,0)
+    }
+    skeleton_img = img_rgb.copy()
+    for conn in HAND_CONNECTIONS:
+        s_idx, e_idx = conn
+        s_pt = keypoints[s_idx]
+        e_pt = keypoints[e_idx]
+        if s_pt[2] > 0.5 and e_pt[2] > 0.5:
+            color = CONNECTION_COLORS.get(conn, (255,255,255))
+            cv2.line(skeleton_img, (int(s_pt[0]), int(s_pt[1])), (int(e_pt[0]), int(e_pt[1])), color, 3)
+    for idx, (x, y, conf) in enumerate(keypoints):
+        if conf > 0.5:
+            cv2.circle(skeleton_img, (int(x), int(y)), 6, (0,255,255), -1)
+            cv2.putText(skeleton_img, str(idx), (int(x)+10, int(y)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,0,0), 2)
+    _, skeleton_buffer = cv2.imencode('.jpg', cv2.cvtColor(skeleton_img, cv2.COLOR_RGB2BGR))
+    skeleton_base64 = base64.b64encode(skeleton_buffer).decode('utf-8')
+
+    _hand_detection_result = {
+        'keypoints': keypoint_list,
+        'basic_image': f"data:image/jpeg;base64,{basic_base64}",
+        'skeleton_image': f"data:image/jpeg;base64,{skeleton_base64}",
+        'message': '检测成功'
+    }
+    print(f"\\n✅ 检测完成，共识别到{len(keypoint_list)}个关键点")`
+        };
 
         // ==================== 语法高亮引擎 ====================
         const PY_KW = ['import','from','def','class','if','elif','else','for','while','try','except','finally','with','as','return','yield','raise','pass','break','continue','and','or','not','in','is','True','False','None','global','nonlocal','lambda','assert','del','exit'];
@@ -707,8 +865,15 @@ print("=== 测试完成 ===")`};
             refreshEditor();
             // 切换上传提示和卡片显示状态
             updateUploadTip();
-            // 刷新模型列表
-            loadModels();
+            // head_mode下模型选择自动禁用，显示内置模型
+            const modelSelect = document.getElementById('modelSelect');
+            if (currentFramework === 'head_mode') {
+                modelSelect.innerHTML = '<option value="built-in_hand_model">内置MediaPipe手部关键点模型 (3.2 MB | 内置)</option>';
+                modelSelect.disabled = true; // 禁用选择，避免用户修改
+            } else {
+                modelSelect.disabled = false;
+                loadModels(); // 原有image/text框架加载用户模型
+            }
             // 清空已选测试数据
             selectedTestDataPath = null;
             document.getElementById('selectedTestFile').innerHTML = '';
@@ -724,7 +889,13 @@ print("=== 测试完成 ===")`};
                 tip.innerHTML = '<strong>📋 图片测试数据集要求</strong><br>仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片，结构同训练数据集';
                 small.textContent = '仅支持 .zip 格式，最大500MB';
                 uploadCard.style.display = 'flex'; // 显示上传卡片
-            } else {
+            } 
+            else if (currentFramework === 'head_mode') {
+                tip.innerHTML = '<strong>📋 手部识别要求</strong><br>请上传单张清晰的手部照片（正面、背景简洁、手部无遮挡），支持jpg/png等常见图片格式';
+                small.textContent = '仅支持 jpg/png/bmp 等图片格式，最大10MB';
+                uploadCard.style.display = 'flex'; // 显示上传卡片
+            }
+            else {
                 tip.innerHTML = '<strong>📋 文本生成测试说明</strong><br>无需上传数据集，直接输入Prompt即可测试生成效果；如需计算困惑度(PPL)可自行修改测试代码加载本地数据';
                 small.textContent = '文本生成测试无需上传数据集';
                 uploadCard.style.display = 'none'; // 隐藏上传卡片
@@ -735,6 +906,8 @@ print("=== 测试完成 ===")`};
         async function loadModels() {
             const framework = document.getElementById('frameworkSelect').value;
             const select = document.getElementById('modelSelect');
+            // 头模式不请求后端，直接使用内置模型
+            if (framework === 'head_mode') return;
             try {
                 const res = await fetch(`/api/list_user_models?framework=${framework}`);
                 const data = await res.json();
@@ -787,7 +960,10 @@ print("=== 测试完成 ===")`};
 
         // 处理测试文件选择
         async function handleTestFileSelect(file) {
-            const acceptTypes = currentFramework === 'image' ? ['.zip'] : ['.txt', '.zip'];
+            // 适配head_mode图片格式校验
+            const acceptTypes = currentFramework === 'image' ? ['.zip'] : 
+                               currentFramework === 'head_mode' ? ['.jpg', '.jpeg', '.png', '.bmp', '.webp'] : 
+                               ['.txt', '.zip'];
             const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             if (!acceptTypes.includes(fileExt)) {
                 showTestError(`仅支持${acceptTypes.join('/')}格式文件`);
@@ -879,21 +1055,28 @@ print("=== 测试完成 ===")`};
         async function runTest() {
             if (isRunning) return;
             
-            // 校验参数
             const modelName = document.getElementById('modelSelect').value;
             const testCode = document.getElementById('testCode').value.trim();
-            if (!modelName) {
+
+            // 参数校验适配head_mode
+            // head_mode下无需选择模型，跳过模型校验
+            if (currentFramework !== 'head_mode' && !modelName) {
                 alert('请先选择要测试的模型');
                 return;
             }
-            // 修改：仅图片框架需要校验上传测试数据，文本框架不需要
-            if (currentFramework === 'image' && !selectedTestDataPath) {
-                alert('请先上传测试数据集');
+            // image和head_mode需要上传测试数据，text不需要
+            if ((currentFramework === 'image' || currentFramework === 'head_mode') && !selectedTestDataPath) {
+                alert(currentFramework === 'image' ? '请先上传测试数据集' : '请先上传手部照片');
                 return;
             }
+            // 测试代码非空校验，head_mode下自动填充默认代码
             if (!testCode) {
-                alert('测试代码不能为空');
-                return;
+                if (currentFramework === 'head_mode') {
+                    document.getElementById('testCode').value = codeTemplates.head_mode;
+                } else {
+                    alert('测试代码不能为空');
+                    return;
+                }
             }
 
             // 锁定按钮
@@ -905,7 +1088,10 @@ print("=== 测试完成 ===")`};
             // 更新状态
             const resultArea = document.getElementById('testResult');
             const statusBadge = document.getElementById('testStatusBadge');
-            resultArea.innerHTML = '<span class="result-info">🔄 正在运行测试，请稍候...</span>';
+            // head_mode下运行提示更友好
+            resultArea.innerHTML = currentFramework === 'head_mode' ? 
+                '<span class="result-info">🔍 正在检测手部关键点，请稍候...</span>' : 
+                '<span class="result-info">🔄 正在运行测试，请稍候...</span>';
             statusBadge.textContent = '运行中';
             statusBadge.style.background = 'var(--accent)';
 
@@ -916,7 +1102,7 @@ print("=== 测试完成 ===")`};
                     body: JSON.stringify({
                         framework: currentFramework,
                         model_name: modelName,
-                        test_code: testCode,
+                        test_code: document.getElementById('testCode').value,
                         // 文本框架下传空路径即可，后端已做兼容
                         test_data_path: selectedTestDataPath || ''
                     })
@@ -945,6 +1131,48 @@ print("=== 测试完成 ===")`};
                     resultHtml += `\n\n<span class="result-info">---------- 测试指标 ----------</span>\n`;
                     for (const [key, value] of Object.entries(data.metrics)) {
                         resultHtml += `${key}: ${value}\n`;
+                    }
+                }
+
+                // head_mode专属结果渲染
+                if (data.head_mode_result) {
+                    // 先显示错误信息（如果有）
+                    if (data.head_mode_result.error) {
+                        resultHtml += `\n\n<span class="result-error">❌ ${data.head_mode_result.message || data.head_mode_result.error}</span>\n`;
+                    }
+                    // 有关键点坐标和图片才渲染
+                    if (data.head_mode_result.keypoints) {
+                        const kps = data.head_mode_result.keypoints;
+                        // 关键点坐标表格
+                        resultHtml += `\n\n<span class="result-info">---------- 手部关键点坐标 ----------</span>\n`;
+                        resultHtml += `<table class="hand-result-table">
+                            <tr>
+                                <th>关键点ID</th>
+                                <th>名称</th>
+                                <th>X坐标</th>
+                                <th>Y坐标</th>
+                                <th>置信度</th>
+                            </tr>
+                            ${kps.map(kp => `
+                            <tr>
+                                <td>${kp.id}</td>
+                                <td>${kp.name}</td>
+                                <td>${kp.x}</td>
+                                <td>${kp.y}</td>
+                                <td>${(kp.confidence * 100).toFixed(2)}%</td>
+                            </tr>
+                            `).join('')}
+                        </table>\n\n`;
+                        // 基础标注图
+                        if (data.head_mode_result.basic_image) {
+                            resultHtml += `<span class="result-info">---------- 基础关键点标注图 ----------</span>\n`;
+                            resultHtml += `<img src="${data.head_mode_result.basic_image}" class="hand-img" alt="基础标注图">\n\n`;
+                        }
+                        // 彩色骨架图
+                        if (data.head_mode_result.skeleton_image) {
+                            resultHtml += `<span class="result-info">---------- 彩色手部骨架图 ----------</span>\n`;
+                            resultHtml += `<img src="${data.head_mode_result.skeleton_image}" class="hand-img" alt="彩色骨架图">\n\n`;
+                        }
                     }
                 }
                 
