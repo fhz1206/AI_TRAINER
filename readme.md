@@ -101,8 +101,9 @@ Windows_ITPP/
 
 ### 环境要求
 
-- Python 3.8+
-- pip
+- Python 3.14.5+（推荐，如使用3.11版本及以上请注意手部识别功能不可用）
+原因：mediapipe库在beta版本改为了TaskAPI，不适配以前版本
+- pip 26+
 
 ### 安装依赖
 
