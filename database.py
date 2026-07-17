@@ -28,10 +28,23 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'user',
+            group_name TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP
         )
     ''')
+    # 确保 admin 用户存在且为管理员
+    admin = cursor.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
+    if admin:
+        cursor.execute('UPDATE users SET role = ? WHERE username = ?', ('admin', 'admin'))
+        print(f"[DB] 管理员账户状态已确认")
+    else:
+        cursor.execute(
+            'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+            ('admin', hash_password('123456'), 'admin')
+        )
+        print(f"[DB] 管理员账户已创建（admin / 123456）")
     
     # ---- 上传文件记录表 ----
     cursor.execute('''
@@ -64,6 +77,20 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+    
+    # ---- 行为日志表 ----
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            activity_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            detail TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id, created_at)')
     
     conn.commit()
     conn.close()
@@ -232,3 +259,139 @@ def get_model_count(user_id):
     ).fetchone()['cnt']
     conn.close()
     return count
+
+
+# ==================== 管理员操作 ====================
+
+def is_admin(user_id):
+    """检查用户是否为管理员（基于 role 判断）"""
+    conn = get_db()
+    row = conn.execute('SELECT role FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    if row and row['role'] == 'admin':
+        return True
+    return False
+
+
+def get_all_users():
+    """获取所有用户列表（管理员用）"""
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT id, username, role, group_name, created_at, last_login FROM users ORDER BY id'
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def admin_update_user_role(user_id, new_role):
+    """管理员修改用户角色"""
+    conn = get_db()
+    conn.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def admin_update_user_group(user_id, group_name):
+    """管理员修改用户分组"""
+    conn = get_db()
+    conn.execute('UPDATE users SET group_name = ? WHERE id = ?', (group_name, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def admin_delete_user(user_id):
+    """管理员删除用户（级联删除关联数据）"""
+    conn = get_db()
+    conn.execute('DELETE FROM users WHERE id = ? AND username != ?', (user_id, 'admin'))
+    conn.commit()
+    conn.close()
+
+
+def admin_reset_password(user_id, new_password):
+    """管理员重置用户密码"""
+    if len(new_password) < 4:
+        return False, '密码长度至少 4 个字符'
+    conn = get_db()
+    conn.execute(
+        'UPDATE users SET password_hash = ? WHERE id = ? AND username != ?',
+        (hash_password(new_password), user_id, 'admin')
+    )
+    conn.commit()
+    conn.close()
+    return True, '密码已重置'
+
+
+def get_all_activity_logs(limit=200):
+    """获取所有用户的行为日志（管理员用）"""
+    conn = get_db()
+    rows = conn.execute(
+        '''SELECT a.*, u.username FROM activity_logs a
+           JOIN users u ON a.user_id = u.id
+           ORDER BY a.created_at DESC LIMIT ?''',
+        (limit,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ==================== 行为日志操作 ====================
+
+def add_activity_log(user_id, activity_type, description, detail=''):
+    """添加一条行为日志"""
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO activity_logs (user_id, activity_type, description, detail) VALUES (?, ?, ?, ?)',
+        (user_id, activity_type, description, detail)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_user_activity_logs(user_id, limit=50):
+    """获取用户的行为日志，按时间倒序"""
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+        (user_id, limit)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ==================== 用户信息修改 ====================
+
+def update_username(user_id, new_username):
+    """修改用户名，返回 (success, message)"""
+    if not new_username or len(new_username) < 2 or len(new_username) > 20:
+        return False, '用户名长度应为 2-20 个字符'
+    conn = get_db()
+    try:
+        conn.execute('UPDATE users SET username = ? WHERE id = ?', (new_username, user_id))
+        conn.commit()
+        return True, '用户名修改成功'
+    except sqlite3.IntegrityError:
+        return False, '用户名已存在'
+    finally:
+        conn.close()
+
+
+def update_password(user_id, old_password, new_password):
+    """修改密码，返回 (success, message)"""
+    if len(new_password) < 4:
+        return False, '新密码长度至少 4 个字符'
+    conn = get_db()
+    row = conn.execute(
+        'SELECT password_hash FROM users WHERE id = ?', (user_id,)
+    ).fetchone()
+    if not row or row['password_hash'] != hash_password(old_password):
+        conn.close()
+        return False, '原密码错误'
+    conn.execute(
+        'UPDATE users SET password_hash = ? WHERE id = ?',
+        (hash_password(new_password), user_id)
+    )
+    conn.commit()
+    conn.close()
+    return True, '密码修改成功'
