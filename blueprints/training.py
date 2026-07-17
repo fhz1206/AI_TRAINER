@@ -7,6 +7,7 @@ import base64
 from time import time
 from config import Config, IMAGE_EXTENSIONS
 from database import save_file_record, get_user_files, get_db
+from database import add_activity_log
 from state import training_tasks
 from trainer import train_image_model, train_text_model
 from blueprints.utils import login_required
@@ -151,6 +152,9 @@ def api_upload():
     ).fetchone()
     file_id = ds['id'] if ds else None
     conn.close()
+
+    # 记录行为日志
+    add_activity_log(user_id, 'upload', f'上传 {train_type} 数据集「{os.path.basename(filepath)}」（{file_count} 个文件）')
     
     return jsonify({
         'status': 'success',
@@ -367,6 +371,10 @@ def api_start_training():
         ))
     thread.daemon = True
     thread.start()
+    
+    # 记录行为日志
+    add_activity_log(user_id, 'train', f'启动 {train_type} 训练 (task_id: {task_id})', 
+                     f'参数: lr={train_params["learning_rate"]}, epochs={train_params["epochs"]}, batch_size={train_params["batch_size"]}')
     
     return jsonify({
         'status': 'success',
