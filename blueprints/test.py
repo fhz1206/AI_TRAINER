@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 import os
+import json
 import shutil
 import re
 import zipfile
@@ -9,6 +10,7 @@ from werkzeug.utils import secure_filename
 from config import Config
 from state import training_tasks
 from blueprints.utils import login_required
+from database import add_activity_log
 # -------------------------- 依赖部分（原有依赖完全保留，新增MediaPipe相关） --------------------------
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -262,6 +264,13 @@ def run_test():
         metrics['ppl'] = float(ppl_val) if ppl_val != 'inf' else 'inf'
     # 新增head_mode结果返回
     custom_result = exec_result.get('custom_result', {})
+    
+    # 记录行为日志
+    if exec_result.get('success'):
+        model_label = model_name or '内置手部模型'
+        add_activity_log(user_id, 'test', f'运行 {framework} 测试（模型: {model_label}）',
+                         f'指标: {json.dumps(metrics, ensure_ascii=False)}')
+    
     return jsonify({
         'status': 'success',
         'output': output,
