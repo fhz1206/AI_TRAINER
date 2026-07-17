@@ -227,6 +227,7 @@
     </div>
 
     <script>
+        const defaultTab = '{{ default_tab }}' || 'login';
         function switchTab(tab) {
             document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
             document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
@@ -234,6 +235,8 @@
             document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
             document.getElementById('message').style.display = 'none';
         }
+        // 初始化：根据URL参数切换到对应标签
+        document.addEventListener('DOMContentLoaded', () => switchTab(defaultTab));
 
         function showMessage(text, type) {
             const msg = document.getElementById('message');
@@ -261,7 +264,7 @@
                 
                 if (data.status === 'success') {
                     showMessage('✅ 登录成功，正在跳转...', 'success');
-                    setTimeout(() => { window.location.href = '/'; }, 800);
+                    setTimeout(() => { window.location.href = '/train'; }, 800);
                 } else {
                     showMessage('❌ ' + data.message, 'error');
                     btn.disabled = false;
