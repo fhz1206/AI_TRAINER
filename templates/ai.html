@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI基础交互学习</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ai.css') }}">
+</head>
+<body>
+    <!-- 导航栏（含用户信息，统一布局避免重叠） -->
+    <nav>
+        <div class="nav-title">🧠 AI基础学习</div>
+        <ul class="nav-links">
+            <li><a href="#token" class="nav-link">分词与Token</a></li>
+            <li><a href="#embedding" class="nav-link">词嵌入</a></li>
+            <li><a href="#attention" class="nav-link">注意力机制</a></li>
+            <li><a href="#gradient" class="nav-link">梯度基础</a></li>
+            <li><a href="#transformer" class="nav-link">Transformer</a></li>
+        </ul>
+        <div class="nav-user-info">
+            <span class="username">{{ username }}</span>
+            <a href="/home" class="btn-test" title="首页">🏠 首页</a>
+            <a href="/train" class="btn-test" title="训练面板">🏠 训练</a>
+            <a href="/check" class="btn-test" title="模型测试">🧪 测试</a>
+            <a href="/profile" class="btn-test" title="账号主页">👤 账号</a>
+            <a href="/logout" class="btn-logout" title="退出登录"
+               onclick="event.preventDefault();fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(d=>{if(d.status==='success')window.location.href='/login'}).catch(()=>window.location.href='/login')">
+                🚪 退出
+            </a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Hero -->
+        <section id="hero">
+            <h1>大模型与人工智能基础交互指南</h1>
+            <p class="hero-desc">专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
+        </section>
+
+        <!-- Token -->
+        <section id="token">
+            <h2>📝 什么是Token？</h2>
+            <div class="card">
+                <p>大模型无法直接理解文字，需要先将文本拆分成一个个 <strong>Token</strong>（词元）。Token 可以是单词、子词(subword)甚至单个字符。</p>
+                <p><strong>Tokenization：</strong>将句子拆分为模型可处理的 Token 序列</p>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 交互演示：实时分词</h3>
+                    <p class="interactive-desc">输入任意文本，查看大模型视角下的分词结果（每按 Enter 或点击"分词"按钮更新）：</p>
+                    <div class="input-group">
+                        <input type="text" id="tokenInput" placeholder="请输入文本，比如：我喜欢吃苹果" value="我喜欢吃苹果">
+                        <button id="tokenBtn">分词 ✂️</button>
+                    </div>
+                    <div class="token-display" id="tokenDisplay"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Embedding -->
+        <section id="embedding">
+            <h2>🔢 词嵌入 (Embedding)</h2>
+            <div class="card">
+                <p>每个 Token 被转换为一个高维向量，捕捉语义信息。语义相近的词在向量空间中距离更近。</p>
+                <p>例子：<strong>"猫"</strong> 和 <strong>"狗"</strong> 的向量距离很近，而 <strong>"猫"</strong> 和 <strong>"汽车"</strong> 的距离较远。</p>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 交互演示：语义空间可视化</h3>
+                    <p class="interactive-desc">🖱️ <strong>悬停</strong>词点查看语义相似度 · <strong>点击</strong>词点选中查看关联 · 输入新词添加到空间：</p>
+                    <div class="input-group">
+                        <input type="text" id="newWordInput" placeholder="输入新词，比如：兔子">
+                        <button id="addWordBtn">添加词汇 ➕</button>
+                    </div>
+                    <div class="canvas-container">
+                        <canvas id="embeddingCanvas" width="700" height="400"></canvas>
+                        <div class="vector-tooltip" id="embeddingTooltip"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Attention -->
+        <section id="attention">
+            <h2>🎯 注意力机制入门</h2>
+            <div class="card">
+                <p>自注意力让模型在处理一个 Token 时，能够"关注"输入序列中的其他所有 Token，从而理解上下文关系。</p>
+                <ul class="feature-list">
+                    <li><strong>Q (Query)：</strong>当前 Token 在找什么</li>
+                    <li><strong>K (Key)：</strong>其他 Token 能提供什么</li>
+                    <li><strong>V (Value)：</strong>其他 Token 的实际内容</li>
+                </ul>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 交互演示：自注意力计算过程</h3>
+                    <p class="interactive-desc">点击下方句子中的词，查看它与其他词的注意力权重分配：</p>
+                    <div class="sentence-display" id="sentenceDisplay"></div>
+                    <div class="attention-chart" id="attentionChart"></div>
+                    <div id="attentionDetail" class="attention-detail"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loss & Perplexity -->
+        <section id="loss">
+            <h2>📉 损失率与困惑度</h2>
+            <div class="card">
+                <p><strong>损失率（Loss）</strong>衡量模型预测与真实结果的差距，越小表示模型拟合越好。<strong>困惑度（Perplexity，PPL）</strong>是损失率的指数形式，反映模型对下一个词的"不确定程度"。</p>
+                <ul class="feature-list">
+                    <li><strong>Loss = 0.0</strong> → 完美预测，PPL = 1.0（完全确定）</li>
+                    <li><strong>Loss = 2.3</strong> → 随机猜测，PPL = 词表大小</li>
+                    <li><strong>Loss = 5.0</strong> → 几乎无效，PPL 极高</li>
+                </ul>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 交互演示：训练过程损失曲线</h3>
+                    <p class="interactive-desc">调整学习率，观察不同参数下损失下降速度和收敛效果：</p>
+                    <canvas id="lossCanvas" width="700" height="350"></canvas>
+                    <div class="loss-controls">
+                        <div class="control-item">
+                            <label>学习率：<span id="lossLrValue">0.01</span></label>
+                            <input type="range" id="lossLrSlider" min="0.001" max="0.1" step="0.001" value="0.01">
+                        </div>
+                        <div class="control-item">
+                            <label>噪声：<span id="noiseValue">0.05</span></label>
+                            <input type="range" id="noiseSlider" min="0" max="0.2" step="0.005" value="0.05">
+                        </div>
+                        <button id="resetLossBtn">🔄 重新训练</button>
+                    </div>
+                    <div class="loss-metrics">
+                        <div class="metric-chip"><span>当前 Loss</span><strong id="currentLoss">—</strong></div>
+                        <div class="metric-chip"><span>当前 PPL</span><strong id="currentPpl">—</strong></div>
+                        <div class="metric-chip"><span>训练轮数</span><strong id="epochCount">0</strong></div>
+                    </div>
+                    <p class="tip-text">💡 损失曲线下降越快越平滑，说明模型训练效果越好。PPL = e<sup>Loss</sup>，Loss 每降低 1.0，PPL 缩小约 2.7 倍。</p>
+                </div>
+            </div>
+        </section>
+            <h2>🎯 人工智能核心基础：梯度与优化</h2>
+            <div class="card">
+                <h3>什么是梯度？</h3>
+                <p>梯度是机器学习中最核心的概念之一，你可以把它理解为<strong>「函数增长最快的方向的向导」</strong>：</p>
+                <ul class="feature-list">
+                    <li>在模型训练中，我们需要最小化「损失函数」（衡量模型预测和真实结果的差距）</li>
+                    <li>梯度是损失函数对每个参数的偏导数组成的向量，指向函数值<strong>上升最快</strong>的方向</li>
+                    <li>梯度下降算法的核心逻辑：<strong>往梯度的反方向更新参数</strong>，就能一步步走到损失函数的最小值点，让模型预测越来越准</li>
+                </ul>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 交互演示：梯度下降下山过程</h3>
+                    <p class="interactive-desc">调整学习率，观察红色小球（模型参数）如何沿着梯度反方向滚动到最低点（最优参数）。按 <kbd>R</kbd> 键快速重置。</p>
+                    <canvas id="gradientCanvas" width="700" height="400"></canvas>
+                    <div class="gradient-controls">
+                        <div class="control-item">
+                            <label>学习率：<span id="lrValue">0.1</span></label>
+                            <input type="range" id="lrSlider" min="0.01" max="0.5" step="0.01" value="0.1">
+                        </div>
+                        <button id="resetGradientBtn">🔄 重置动画</button>
+                    </div>
+                    <p class="tip-text">💡 提示：学习率太小收敛慢，太大容易在最低点附近震荡甚至无法收敛</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Transformer -->
+        <section id="transformer">
+            <h2>🧠 Transformer 架构概览</h2>
+            <div class="card">
+                <p>Transformer 由编码器(Encoder)和解码器(Decoder)组成，现代大模型（如 GPT、LLaMA）通常只使用解码器部分。</p>
+                <p><strong>数据流：</strong>输入 → 嵌入 → 多层注意力 → 输出</p>
+
+                <div class="interactive-area">
+                    <h3 class="interactive-title">✨ 动画演示：数据流动过程</h3>
+                    <div class="transformer-flow">
+                        <div class="flow-step">
+                            <div>📝 输入文本</div>
+                            <div class="flow-data" style="animation-delay: 0s;"></div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step">
+                            <div>🔢 词嵌入</div>
+                            <div class="flow-data" style="animation-delay: 0.5s;"></div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step">
+                            <div>🧠 多层注意力</div>
+                            <div class="flow-data" style="animation-delay: 1s;"></div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step">
+                            <div>📤 输出结果</div>
+                            <div class="flow-data" style="animation-delay: 1.5s;"></div>
+                        </div>
+                    </div>
+                    <p class="tip-text">💡 悬停在各模块上可查看详细功能说明</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>交互式 AI 基础学习页面</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/ai.js') }}"></script>
+</body>
+</html>
