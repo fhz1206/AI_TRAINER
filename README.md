@@ -56,7 +56,7 @@ Windows_ITPP/
 │   ├── profile.html        # 账号主页
 │   └── admin.html          # 管理员面板
 ├── tokenizer/
-│   └── tokenizer (1).json  # BPE 分词模型
+│   └── tokenizer.json  # BPE 分词模型
 ├── uploads/                # 训练数据
 ├── models/                 # 模型文件 (.pth)
 ├── test_data/              # 测试数据
@@ -69,7 +69,7 @@ Windows_ITPP/
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.11+
 - pip
 
 ### 安装依赖
