@@ -10,6 +10,10 @@
 | DirectionsUser.md | DirectionsAdmin.md |
 ---
 
+# 预计更新
+## v1.1.0 添加队列管理系统和资源限制系统
+---
+
 ## 技术栈
 
 | 层级 | 技术 |
