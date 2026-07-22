@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
     <title>统一训练平台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,7 +11,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="app-wrapper">
+    <canvas id="particles-canvas"></canvas>
+    <div class="app-wrapper" style="position:relative;z-index:1;">
         <!-- 顶部导航栏 -->
         <div class="user-info" style="position:static;display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:12px 0 0;flex-wrap:wrap;">
             <span class="username" id="headerUsername">{{ username }}</span>
@@ -315,5 +317,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
 </html>
