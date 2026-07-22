@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
     <title>账号主页</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
@@ -44,7 +45,8 @@
     </style>
 </head>
 <body>
-    <div class="app-wrapper profile-wrapper">
+    <canvas id="particles-canvas"></canvas>
+    <div class="app-wrapper profile-wrapper" style="position:relative;z-index:1;">
         <!-- 导航栏 -->
         <div class="user-info" style="position:static;justify-content:flex-end;margin-bottom:24px;padding-top:12px;">
             <span class="username" id="headerUsername">{{ username }}</span>
@@ -251,5 +253,6 @@
         loadProfile();
         loadActivityLogs();
     </script>
+<script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
 </html>
