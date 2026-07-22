@@ -1,6 +1,6 @@
 // ==================== 全局状态 ====================
-let currentType = 'image';
-let currentTaskId = null;
+let currentType = localStorage.getItem('currentType') || 'image';
+let currentTaskId = localStorage.getItem('currentTaskId') || null;
 let statusInterval = null;
 let uploadedFileCount = 0;
 let selectedDatasetId = null;
@@ -485,6 +485,7 @@ async function startTraining() {
         
         if (data.status === 'success') {
             currentTaskId = data.task_id;
+            localStorage.setItem('currentTaskId', currentTaskId);
             document.getElementById('statusBadge').textContent = '🔄 运行中';
             document.getElementById('statusMessage').textContent = data.message;
             if (statusInterval) clearInterval(statusInterval);
@@ -554,6 +555,7 @@ async function pollStatus() {
             badge.style.background = '#22c55e';
             clearInterval(statusInterval);
             statusInterval = null;
+            localStorage.removeItem('currentTaskId');
             document.getElementById('startBtn').disabled = false;
             document.getElementById('startBtn').textContent = '🚀 开始训练';
             setTimeout(loadModels, 1000);
@@ -562,6 +564,7 @@ async function pollStatus() {
             badge.style.background = '#ef4444';
             clearInterval(statusInterval);
             statusInterval = null;
+            localStorage.removeItem('currentTaskId');
             document.getElementById('startBtn').disabled = false;
             document.getElementById('startBtn').textContent = '🚀 开始训练';
         }
@@ -672,9 +675,20 @@ async function handleLogout() {
 
 // ==================== 页面初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
+    // 恢复训练类型
+    if (currentType) switchType(currentType);
+    
     // 加载模型和数据集列表
     loadModels();
     loadDatasets();
+
+    // 恢复之前未完成的训练任务
+    if (currentTaskId) {
+        pollStatus();
+        statusInterval = setInterval(pollStatus, 500);
+        document.getElementById('statusBadge').textContent = '🔄 恢复中...';
+        document.getElementById('statusMessage').textContent = '正在恢复之前的训练任务...';
+    }
 
     // MoE/MLA复选框联动参数显示
     document.getElementById('use_moe').addEventListener('change', function() {
