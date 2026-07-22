@@ -11,7 +11,7 @@
 ---
 
 # 预计更新
-## v1.0.1 修复一堆问题（当前LevelSuggestionBug度:4/4,当前LevelLowBug修复进度3/4）
+## v1.0.1 修复一堆问题（当前LevelSuggestionBug修复进度:4/4,当前LevelLowBug修复进度3/4）
 修复切换页面后训练进度丢失的问题；
 修复分词部分空格没有分token的问题；
 修复admin页面无直接跳转至学习等页面的问题；
