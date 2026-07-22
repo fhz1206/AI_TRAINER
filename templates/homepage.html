@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
     <title>统一训练平台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -218,7 +219,7 @@
     </nav>
 
     <section class="hero">
-        <div class="hero-badge">🚀 v1.0 · 统一训练平台</div>
+        <div class="hero-badge" id="versionBadge">🚀 加载中...</div>
         <h1>训练 · 测试 · 学习<br>一站式 AI 模型平台</h1>
         <p>支持 CNN 图片分类与 Transformer 文本生成模型训练，内置测试环境和 AI 基础交互学习页面，让开发者快速上手深度学习</p>
         <div class="hero-actions">
@@ -259,6 +260,53 @@
                 <div class="feature-icon">📊</div>
                 <h3>行为记录与账号</h3>
                 <p>完整的账号体系，支持修改密码/用户名，查看上传、训练、测试等行为记录，随时掌握使用情况</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>管理员面板</h3>
+                <p>用户管理、权限控制、带宽限制、训练队列调度、设备监控、日志审计，全方位管理平台运行</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📦</div>
+                <h3>扩展系统</h3>
+                <p>支持第三方扩展开发，可自定义模型架构、训练算法、数据预处理、可视化工具，灵活扩展平台功能</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 技术栈 -->
+    <section class="features" id="techstack">
+        <h2>🛠️ 技术栈</h2>
+        <div class="features-grid">
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">🐍</div>
+                <h3>后端框架</h3>
+                <p>Flask 3.x · Flask-CORS · SQLite3 WAL 模式</p>
+            </div>
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">🧠</div>
+                <h3>深度学习</h3>
+                <p>PyTorch 2.x · torchvision · Pillow · OpenCV</p>
+            </div>
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">✋</div>
+                <h3>手势识别</h3>
+                <p>MediaPipe Tasks API · 21 关键点实时检测</p>
+            </div>
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">🔤</div>
+                <h3>分词引擎</h3>
+                <p>HuggingFace Tokenizers · BPE 算法 · 128K 词表</p>
+            </div>
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">📊</div>
+                <h3>系统监控</h3>
+                <p>psutil · 实时 CPU/RAM 监控 · 带宽限制</p>
+            </div>
+            <div class="feature-card" style="text-align:center;">
+                <div class="feature-icon">🌐</div>
+                <h3>前端</h3>
+                <p>HTML5 · CSS3 · Vanilla JS · Canvas 动画</p>
             </div>
         </div>
     </section>
@@ -311,6 +359,20 @@
         }
         window.addEventListener('resize', () => { resize(); createParticles(60); });
         resize(); createParticles(60); draw();
+
+        // 获取版本号
+        fetch('/api/version')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success' && data.version) {
+                    const v = data.version;
+                    document.getElementById('versionBadge').textContent = `🚀 v${v.ResVersion} · 统一训练平台`;
+                }
+            })
+            .catch(() => {
+                document.getElementById('versionBadge').textContent = '🚀 统一训练平台';
+            });
     </script>
+<script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
 </html>
