@@ -2,6 +2,17 @@
    🧠 统一训练平台 — 完整样式表
    ============================================================ */
 
+/* ==================== 粒子背景 ==================== */
+#particles-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
 /* ==================== 全局重置 & 变量 ==================== */
 *, *::before, *::after {
     margin: 0;
@@ -1060,6 +1071,7 @@ body {
     transition: all 0.3s ease;
     font-family: inherit;
     white-space: nowrap;
+    text-decoration: none;
 }
 /* 小屏幕适配 */
 @media (max-width: 640px) {
