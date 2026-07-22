@@ -8,6 +8,8 @@ from database import is_admin, get_all_users, get_user_by_id
 from database import admin_update_user_role, admin_update_user_group, admin_delete_user
 from database import admin_reset_password, get_all_activity_logs, add_activity_log
 from database import hash_password, get_db
+from state import get_queue_status, set_max_concurrent, cancel_task, training_tasks
+from state import get_bandwidth_stats, get_default_bandwidth, set_default_bandwidth, set_user_bandwidth_limit
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -240,3 +242,68 @@ def api_monitor():
             'total': ram_total,
         }
     })
+
+
+@admin_bp.route('/api/queue')
+@login_required
+@admin_required
+def api_get_queue():
+    """获取训练队列状态"""
+    q = get_queue_status()
+    return jsonify({'status': 'success', 'queue': q})
+
+
+@admin_bp.route('/api/queue/max_concurrent', methods=['POST'])
+@login_required
+@admin_required
+def api_set_max_concurrent():
+    """设置最大并发训练数"""
+    data = request.json
+    n = int(data.get('max_concurrent', 5))
+    set_max_concurrent(n)
+    add_activity_log(session['user_id'], 'admin', f'设置最大并发训练数为 {n}')
+    return jsonify({'status': 'success'})
+
+
+@admin_bp.route('/api/queue/cancel/<task_id>', methods=['POST'])
+@login_required
+@admin_required
+def api_cancel_task(task_id):
+    """取消/停止训练任务"""
+    success, msg = cancel_task(task_id)
+    if success:
+        add_activity_log(session['user_id'], 'admin', f'取消训练任务 {task_id}')
+    return jsonify({'status': 'success' if success else 'error', 'message': msg})
+
+
+@admin_bp.route('/api/bandwidth')
+@login_required
+@admin_required
+def api_get_bandwidth():
+    """获取带宽统计"""
+    stats = get_bandwidth_stats()
+    return jsonify({'status': 'success', 'bandwidth': stats})
+
+
+@admin_bp.route('/api/bandwidth/default', methods=['POST'])
+@login_required
+@admin_required
+def api_set_default_bandwidth():
+    """设置默认带宽限制"""
+    data = request.json
+    mbps = float(data.get('mbps', 10))
+    set_default_bandwidth(mbps)
+    add_activity_log(session['user_id'], 'admin', f'设置默认带宽限制为 {mbps} Mbps')
+    return jsonify({'status': 'success'})
+
+
+@admin_bp.route('/api/bandwidth/user/<user_id>', methods=['POST'])
+@login_required
+@admin_required
+def api_set_user_bandwidth(user_id):
+    """设置用户单独带宽限制"""
+    data = request.json
+    mbps = float(data.get('mbps', 10))
+    set_user_bandwidth_limit(user_id, mbps)
+    add_activity_log(session['user_id'], 'admin', f'设置用户 {user_id} 带宽限制为 {mbps} Mbps')
+    return jsonify({'status': 'success'})
