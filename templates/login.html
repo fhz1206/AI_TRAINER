@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
     <title>登录 - 训练平台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -172,7 +173,8 @@
     </style>
 </head>
 <body>
-    <div class="auth-container">
+    <canvas id="particles-canvas"></canvas>
+    <div class="auth-container" style="position:relative;z-index:1;">
         <div class="auth-header">
             <div class="logo">🧠</div>
             <h1>训练平台</h1>
@@ -327,5 +329,6 @@
             }
         });
     </script>
+<script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
 </html>
