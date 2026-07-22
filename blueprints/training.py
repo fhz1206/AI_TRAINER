@@ -9,6 +9,7 @@ from config import Config, IMAGE_EXTENSIONS
 from database import save_file_record, get_user_files, get_db
 from database import add_activity_log
 from state import training_tasks
+from state import enqueue_task, can_start_task, mark_task_done, get_queue_status
 from trainer import train_image_model, train_text_model
 from blueprints.utils import login_required
 
@@ -370,30 +371,50 @@ def api_start_training():
             str(user_id), task_id, model_params, train_params, training_tasks
         ))
     thread.daemon = True
-    thread.start()
-    
-    # 记录行为日志
-    add_activity_log(user_id, 'train', f'启动 {train_type} 训练 (task_id: {task_id})', 
+
+    # 加入训练队列
+    queue_params = {
+        'train_type': train_type,
+        'model_params': model_params,
+        'train_params': train_params,
+    }
+    success, msg, position = enqueue_task(task_id, str(user_id), queue_params)
+    if not success:
+        return jsonify({'status': 'error', 'message': msg}), 400
+
+    if can_start_task(task_id):
+        thread.start()
+        status_msg = f'{train_type} 训练已启动 (task_id: {task_id})'
+    else:
+        status_msg = f'已加入队列，等待中 (位置: #{position})'
+
+    add_activity_log(user_id, 'train', f'启动 {train_type} 训练 (task_id: {task_id})',
                      f'参数: lr={train_params["learning_rate"]}, epochs={train_params["epochs"]}, batch_size={train_params["batch_size"]}')
-    
+
     return jsonify({
         'status': 'success',
         'task_id': task_id,
-        'message': f'{train_type} 训练已启动 (task_id: {task_id})'
+        'message': status_msg,
+        'queue_position': position,
+        'is_running': can_start_task(task_id),
     })
 
 @training_bp.route('/task_status/<task_id>')
 @login_required
 def api_task_status(task_id):
-    """查询训练任务状态（和原有逻辑完全一致）"""
+    """查询训练任务状态"""
     task = training_tasks.get(task_id)
     if not task:
         return jsonify({'status': 'not_found', 'message': '任务不存在'}), 404
-    
+
+    if task.get('status') in ('completed', 'failed', 'cancelled'):
+        mark_task_done(task_id)
+
     return jsonify({
         'status': task.get('status', 'unknown'),
         'progress': task.get('progress', 0),
         'loss': task.get('loss', None),
         'accuracy': task.get('accuracy', None),
-        'message': task.get('message', '')
+        'message': task.get('message', ''),
+        'queue_position': task.get('queue_position', None),
     })
