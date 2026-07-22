@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.ico') }}">
     <title>模型测试平台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -238,6 +239,10 @@
             font-size: 14px;
             outline: none;
         }
+        .form-select option {
+            background: #1a1a2e;
+            color: var(--text-primary);
+        }
         .form-select:focus {
             border-color: var(--accent);
         }
@@ -280,7 +285,8 @@
     </style>
 </head>
 <body>
-    <div class="app-wrapper">
+    <canvas id="particles-canvas"></canvas>
+    <div class="app-wrapper" style="position:relative;z-index:1;">
         <!-- 头部（和ITPP.html一致） -->
         <header class="app-header">
             <div class="header-glow"></div>
@@ -1214,5 +1220,6 @@ else:
             }
         }
     </script>
+<script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
 </html>
