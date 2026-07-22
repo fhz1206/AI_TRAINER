@@ -165,7 +165,7 @@ function bpeTokenize(text, tokenizer) {
     if (cache.has(text)) return cache.get(text);
 
     // 1. 预分词：按空格和标点拆分
-    const words = text.match(/[a-zA-Z]+|\d+|[^\s]/g) || [text];
+    const words = text.match(/[a-zA-Z]+|\d+|\s+|[^\s]/g) || [text];
     const result = [];
 
     for (const word of words) {
