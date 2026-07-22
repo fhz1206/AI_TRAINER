@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, redirect, request, jsonify, session
 from blueprints.utils import login_required, get_current_username
 from database import get_user_by_id
+import os
+import json as _json
 
 main_bp = Blueprint('main', __name__)
 
@@ -61,3 +63,15 @@ def logout():
 def check_page():
     """测试页面入口"""
     return render_template('check.html', username=get_current_username() or '用户')
+
+
+@main_bp.route('/api/version')
+def api_version():
+    """返回版本信息"""
+    try:
+        vpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'version.json')
+        with open(vpath, 'r', encoding='utf-8') as f:
+            ver = _json.load(f)
+        return jsonify({'status': 'success', 'version': ver})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
