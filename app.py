@@ -111,12 +111,35 @@ _logger.propagate = False
 @app.before_request
 def _log_before_request():
     _flask_request._request_start_time = _time.time()
+    # 记录请求体大小（用于上行带宽统计）
+    try:
+        req_data = _flask_request.get_data()
+        _flask_request._request_bytes = len(req_data)
+    except:
+        _flask_request._request_bytes = 0
 
 @app.after_request
 def _log_after_request(response):
     start_time = getattr(_flask_request, '_request_start_time', _time.time())
     duration_ms = (_time.time() - start_time) * 1000
     now_str = _datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+
+    # 带宽统计（上行+下行）
+    try:
+        from flask import session as _session
+        uid = _session.get('user_id')
+        if uid:
+            req_bytes = getattr(_flask_request, '_request_bytes', 0)
+            resp_bytes = len(response.get_data() or b'')
+            total_bytes = req_bytes + resp_bytes
+            from state import track_bandwidth
+            exceeded, cur_mbps, limit = track_bandwidth(uid, total_bytes)
+            if exceeded:
+                # 超出带宽限制，添加响应头标记
+                response.headers['X-RateLimit-Limit'] = str(limit)
+                response.headers['X-RateLimit-Remaining'] = '0'
+    except:
+        pass
 
     # 请求体
     body = ''
