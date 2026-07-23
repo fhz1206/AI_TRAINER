@@ -389,8 +389,12 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
 
                 opt.zero_grad()
                 
-                # 直接调用模型，无需MoE逻辑
-                logits = model(input_ids)
+                # 前向传播（支持MoE）
+                if model.use_moe:
+                    logits, aux_loss = model(input_ids, return_aux_loss=True)
+                else:
+                    logits = model(input_ids)
+                    aux_loss = torch.tensor(0.0, device=logits.device)
 
                 # 计算损失
                 logits = logits.view(-1, logits.size(-1))
@@ -400,7 +404,7 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
                 cls_loss = criterion(logits, labels)
                 # 主损失清洗
                 cls_loss = torch.nan_to_num(cls_loss, nan=1e-8, posinf=1e-8, neginf=1e-8)
-                loss = cls_loss
+                loss = cls_loss + aux_loss
 
                 # 核心修复6：梯度爆炸检测+裁剪
                 loss.backward()
