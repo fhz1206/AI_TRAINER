@@ -239,6 +239,76 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         return self.relu(self.bn(self.conv(x)))
 
+
+class MoELayer(nn.Module):
+    """Mixture of Experts 层，替换标准 FFN，支持 Top-K 路由和负载均衡辅助损失"""
+    def __init__(self, d_model, d_ff, num_experts=4, top_k=2, dropout=0.1, aux_loss_weight=0.02):
+        super().__init__()
+        self.num_experts = num_experts
+        self.top_k = top_k
+        self.aux_loss_weight = aux_loss_weight
+        self.d_model = d_model
+
+        # 门控网络（Router）
+        self.gate = nn.Linear(d_model, num_experts, bias=False)
+
+        # 专家网络（每个专家是一个两层 FFN）
+        self.experts = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(d_model, d_ff),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(d_ff, d_model),
+                nn.Dropout(dropout),
+            )
+            for _ in range(num_experts)
+        ])
+
+    def forward(self, x):
+        """
+        x: (batch_size, seq_len, d_model)
+        返回: (batch_size, seq_len, d_model), aux_loss
+        """
+        batch_size, seq_len, d_model = x.shape
+        x_flat = x.view(-1, d_model)  # (batch_size * seq_len, d_model)
+
+        # 门控得分
+        gate_logits = self.gate(x_flat)  # (N, num_experts)
+        gate_weights = F.softmax(gate_logits, dim=-1)  # (N, num_experts)
+
+        # Top-K 选择
+        topk_weights, topk_indices = torch.topk(gate_weights, self.top_k, dim=-1)
+        topk_weights = topk_weights / (topk_weights.sum(dim=-1, keepdim=True) + 1e-8)
+
+        # 初始化输出
+        output = torch.zeros_like(x_flat)
+
+        # 对每个专家执行计算
+        for expert_idx in range(self.num_experts):
+            # 哪些 token 选择了这个专家
+            mask = (topk_indices == expert_idx).any(dim=-1)
+            if not mask.any():
+                continue
+            expert_input = x_flat[mask]
+            expert_output = self.experts[expert_idx](expert_input)
+            # 该 token 对应这个专家的权重
+            weight = topk_weights[mask][:, topk_indices[mask].eq(expert_idx).float().argmax(dim=-1)]
+            output[mask] += expert_output * weight.unsqueeze(-1)
+
+        # 负载均衡辅助损失（鼓励各专家使用率均衡）
+        # 每个专家被选中的概率
+        if self.training:
+            expert_usage = torch.zeros(self.num_experts, device=x.device)
+            for i in range(self.num_experts):
+                expert_usage[i] = (topk_indices == i).any(dim=-1).float().mean()
+            # 理想分布：均匀分布
+            target_usage = torch.ones_like(expert_usage) / self.num_experts
+            aux_loss = F.mse_loss(expert_usage, target_usage) * self.aux_loss_weight
+        else:
+            aux_loss = torch.tensor(0.0, device=x.device)
+
+        return output.view(batch_size, seq_len, d_model), aux_loss
+
 # -------------------------- 模型类 --------------------------
 class SimpleResNet(nn.Module):
     """轻量级ResNet，用于图像分类任务"""
@@ -296,30 +366,41 @@ class SimpleResNet(nn.Module):
         return self.fc(x)
 
 class TextTransformerModel(nn.Module):
-    """生成式Transformer大模型（Decoder-only架构），支持MLA，彻底移除MoE相关逻辑"""
+    """生成式Transformer大模型（Decoder-only架构），支持MLA和MoE"""
     def __init__(self, vocab_size=1000, d_model=512, n_layers=6, n_heads=8, 
                  d_ff=2048, max_seq_len=128, dropout=0.1, pad_token_id=0,
-                 # 保留MoE参数兼容前端传入，直接忽略即可
                  use_moe=False, moe_experts=4, moe_top_k=2, aux_loss_weight=0.02,
                  moe_noise_epsilon=0.01, use_mla=False, mla_dim=256):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.max_seq_len = max_seq_len
-        self.use_moe = False  # 强制禁用MoE
+        self.use_moe = use_moe
         self.use_mla = use_mla
         self.pad_token_id = pad_token_id
+        self.aux_loss_weight = aux_loss_weight
+
         # 词嵌入+位置嵌入（支持pad token）
         self.token_emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_id)
         self.pos_emb = nn.Embedding(max_seq_len, d_model)
         self.dropout = nn.Dropout(dropout)
 
-        # 标准Decoder-only架构，norm_first=True采用pre-norm，数值稳定
+        # 标准Decoder-only架构
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model, nhead=n_heads, dim_feedforward=d_ff,
             dropout=dropout, activation='gelu', batch_first=True, norm_first=True
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=n_layers)
+
+        # MoE层（替换每层decoder的FFN，可选）
+        if use_moe:
+            self.moe_layers = nn.ModuleList([
+                MoELayer(d_model, d_ff, num_experts=moe_experts, top_k=moe_top_k,
+                         dropout=dropout, aux_loss_weight=aux_loss_weight)
+                for _ in range(n_layers)
+            ])
+        else:
+            self.moe_layers = None
 
         # LM头，支持MLA
         if use_mla:
@@ -347,44 +428,44 @@ class TextTransformerModel(nn.Module):
 
     def forward(self, input_ids, return_aux_loss=False):
         """
-        生成式前向传播，彻底移除MoE逻辑
+        生成式前向传播，支持MoE
         input_ids: shape (batch_size, seq_len)
         返回：(batch_size, seq_len, vocab_size) 预测logits
         """
         batch_size, seq_len = input_ids.size()
-        # 输入长度截断，避免超过最大长度
         if seq_len > self.max_seq_len:
             input_ids = input_ids[:, :self.max_seq_len]
             seq_len = self.max_seq_len
-        
-        # 位置编码
+
         pos = torch.arange(seq_len, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
         x = self.token_emb(input_ids) + self.pos_emb(pos)
         x = self.dropout(x)
 
-        # 2D因果掩码，自动广播
         causal_mask = torch.tril(
             torch.ones(seq_len, seq_len, device=input_ids.device, dtype=torch.bool)
         )
         tgt_key_padding_mask = (input_ids == self.pad_token_id)
 
-        # 直接调用原生Decoder，无MoE分支
         x = self.decoder(
-            x, x, 
+            x, x,
             tgt_mask=causal_mask,
             tgt_key_padding_mask=tgt_key_padding_mask
         )
 
-        # LM头输出
+        # MoE 前向传播
+        total_aux_loss = 0.0
+        if self.use_moe and self.moe_layers is not None:
+            for moe_layer in self.moe_layers:
+                x, aux_loss = moe_layer(x)
+                total_aux_loss += aux_loss
+
         if self.use_mla:
             x = self.mla_proj(x)
         logits = self.lm_head(x)
-        # 数值清洗，避免异常值
         logits = torch.nan_to_num(logits, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # 兼容前端的return_aux_loss参数，直接返回logits
         if return_aux_loss:
-            return logits, torch.tensor(0.0, device=logits.device)
+            return logits, total_aux_loss
         return logits
 
     def generate(self, prompt_ids, max_new_tokens=50, temperature=1.0, top_k=50, pad_token_id=0, eos_token_id=None):
