@@ -3,6 +3,9 @@
 > 基于 Flask + PyTorch 的深度学习训练与测试平台，支持 CNN 图像分类和 Transformer 文本生成模型的全流程训练、管理与测试。
 
 > 用户和管理员的使用说明请查看使用说明查找表
+
+>AI_TRAINER x CodeMate（https://gitcode.com/fhz1206/CodeMate） x CostCut-Infer（https://gitcode.com/fhz1206/CostCut-Infer
+）
 ---
 # 使用说明查找表
 | 用户使用说明 | 管理员使用说明 |
