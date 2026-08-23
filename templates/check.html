@@ -403,17 +403,17 @@ import torch
 import os
 from torch.utils.data import DataLoader
 from model import SimpleResNet, ImageDataset
+from model_io import load_model
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
-from PIL import Image
 
 # -------------------------- 可修改参数 --------------------------
 BATCH_SIZE = 32
 IMAGE_SIZE = 224
 # -----------------------------------------------------------------
 
-# 1. 加载模型（自动注入模型路径，无需修改）
+# 1. 加载模型（自动注入模型路径，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
 print("正在加载模型...")
-model = torch.load(model_path, map_location='cpu', weights_only=False)
+model = load_model(model_path, map_location='cpu')
 model.eval()
 print(f"模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -497,10 +497,11 @@ TOP_K = 0               # 测试时先关闭top_k过滤
 PROMPT = "今天天气真"   # 测试生成用的起始文本，可随意修改
 # -----------------------------------------------------------------
 
-# 1. 加载模型（自动注入，无需修改）
+# 1. 加载模型（自动注入，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
 print("正在加载模型...")
 try:
-    model = torch.load(model_path, map_location='cpu', weights_only=False)
+    from model_io import load_model, load_vocab
+    model = load_model(model_path, map_location='cpu')
     model.eval()
     print(f"✅ 模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
     print(f"模型配置: vocab_size={model.vocab_size}, max_seq_len={model.max_seq_len}, MoE={model.use_moe}, MLA={model.use_mla}")
@@ -521,9 +522,9 @@ try:
         train_params = model._metadata.get('train_params', {})
         data_path = train_params.get('data_path', '')
         if data_path:
-            vocab_path = data_path.rstrip('/') + '_token2char.pth'
-            if os.path.exists(vocab_path):
-                token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
+            loaded_vocab = load_vocab(data_path.rstrip('/'))
+            if loaded_vocab:
+                token2char = loaded_vocab
                 char2token = {char: idx for idx, char in token2char.items()}
                 vocab_loaded = True
                 print(f"✅ 词表加载成功（来自训练数据目录），词表大小: {len(token2char)}")
@@ -542,13 +543,15 @@ if not vocab_loaded:
                     # 在checkpoint目录中查找词表文件
                     for root, dirs, files in os.walk(ckpt_dir):
                         for f in files:
-                            if f.endswith('_token2char.pth'):
-                                vocab_path = os.path.join(root, f)
-                                token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
-                                char2token = {char: idx for idx, char in token2char.items()}
-                                vocab_loaded = True
-                                print(f"✅ 词表加载成功（来自checkpoint目录），词表大小: {len(token2char)}")
-                                break
+                            if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
+                                prefix = os.path.join(root, f[:f.rfind('_token2char')])
+                                loaded_vocab = load_vocab(prefix)
+                                if loaded_vocab:
+                                    token2char = loaded_vocab
+                                    char2token = {char: idx for idx, char in token2char.items()}
+                                    vocab_loaded = True
+                                    print(f"✅ 词表加载成功（来自checkpoint目录），词表大小: {len(token2char)}")
+                                    break
                         if vocab_loaded:
                             break
                 if vocab_loaded:
@@ -563,13 +566,15 @@ if not vocab_loaded:
         if os.path.exists(uploads_dir):
             for root, dirs, files in os.walk(uploads_dir):
                 for f in files:
-                    if f.endswith('_token2char.pth'):
-                        vocab_path = os.path.join(root, f)
-                        token2char = torch.load(vocab_path, map_location='cpu', weights_only=False)
-                        char2token = {char: idx for idx, char in token2char.items()}
-                        vocab_loaded = True
-                        print(f"✅ 词表加载成功（来自uploads目录），词表大小: {len(token2char)}")
-                        break
+                    if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
+                        prefix = os.path.join(root, f[:f.rfind('_token2char')])
+                        loaded_vocab = load_vocab(prefix)
+                        if loaded_vocab:
+                            token2char = loaded_vocab
+                            char2token = {char: idx for idx, char in token2char.items()}
+                            vocab_loaded = True
+                            print(f"✅ 词表加载成功（来自uploads目录），词表大小: {len(token2char)}")
+                            break
                 if vocab_loaded:
                     break
     except Exception as e:

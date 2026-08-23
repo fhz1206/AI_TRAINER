@@ -307,3 +307,49 @@ def api_set_user_bandwidth(user_id):
     set_user_bandwidth_limit(user_id, mbps)
     add_activity_log(session['user_id'], 'admin', f'设置用户 {user_id} 带宽限制为 {mbps} Mbps')
     return jsonify({'status': 'success'})
+
+
+# ==================== 存储清理 ====================
+@admin_bp.route('/api/cleanup/status')
+@login_required
+@admin_required
+def api_cleanup_status():
+    """存储占用统计与清理配置"""
+    from cleanup import cleanup_status
+    return jsonify({'status': 'success', 'cleanup': cleanup_status()})
+
+
+@admin_bp.route('/api/cleanup/config', methods=['POST'])
+@login_required
+@admin_required
+def api_cleanup_config():
+    """设置自动清理时效（retention_days=0 表示关闭自动清理）"""
+    from cleanup import set_cleanup_config, get_cleanup_config
+    data = request.json or {}
+    cfg = set_cleanup_config(
+        retention_days=data.get('retention_days'),
+        auto_clean_models=data.get('auto_clean_models'),
+        auto_clean_uploads=data.get('auto_clean_uploads'),
+    )
+    add_activity_log(session['user_id'], 'admin',
+                     f"设置自动清理：保留 {cfg['retention_days']} 天（0=关闭）")
+    return jsonify({'status': 'success', 'config': get_cleanup_config()})
+
+
+@admin_bp.route('/api/cleanup/run', methods=['POST'])
+@login_required
+@admin_required
+def api_cleanup_run():
+    """手动清理：targets 为空列表时清全部（模型/上传数据/日志）"""
+    from cleanup import run_cleanup
+    data = request.json or {}
+    targets = [t for t in data.get('targets', ['models', 'uploads', 'logs'])
+               if t in ('models', 'uploads', 'logs')]
+    if not targets:
+        return jsonify({'status': 'error', 'message': '未选择清理目标'}), 400
+    detail = run_cleanup(targets=targets)
+    total_freed = sum(d['freed'] for d in detail.values())
+    add_activity_log(session['user_id'], 'admin',
+                     f'手动清理 {",".join(targets)}，释放 {total_freed / 1024 / 1024:.1f} MB')
+    return jsonify({'status': 'success', 'detail': detail,
+                    'freed_mb': round(total_freed / 1024 / 1024, 2)})

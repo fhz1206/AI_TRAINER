@@ -97,6 +97,10 @@ from app_logger import init_app_logger
 
 init_app_logger(app)
 
+# 后台自动清理调度（按管理员配置的保留天数清理过期文件；守护线程，随主进程退出）
+from cleanup import start_auto_clean_scheduler
+start_auto_clean_scheduler()
+
 # ==================== 服务启动 ====================
 if __name__ == '__main__':
     try:

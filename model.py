@@ -183,9 +183,9 @@ class TextDataset(Dataset):
             print(f"[TextDataset] 警告：实际词表大小{len(self.char2token)}超过设定{vocab_size}，将保留前{vocab_size}个常用字")
             self.char2token = dict(list(self.char2token.items())[:vocab_size])
             self.token2char = {idx: char for char, idx in self.char2token.items()}
-        # 保存词表到数据集同目录，测试时加载
-        vocab_save_path = f"{folder_path}_token2char.pth"
-        torch.save(self.token2char, vocab_save_path)
+        # 保存词表到数据集同目录，测试时加载（JSON 格式，避免 pickle）
+        from model_io import save_vocab_json
+        vocab_save_path = save_vocab_json(self.token2char, folder_path)
         print(f"[TextDataset] 词表已保存到: {vocab_save_path}，词表大小: {len(self.token2char)}")
         # -----------------------------------------------------------------------
 

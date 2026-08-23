@@ -297,7 +297,7 @@ def list_user_models():
     }
     target_type = framework_to_model_type.get(framework, framework)
     for f in os.listdir(models_dir):
-        if f.endswith('.pth'):
+        if f.endswith(('.pth', '.safetensors')):
             model_type = 'other'
             f_lower = f.lower()
             if f_lower.startswith('cnn_') or 'cnn' in f_lower:

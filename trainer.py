@@ -28,6 +28,7 @@ random_seed(42)  # 固定随机种子保证训练可复现
 from database import save_model_record
 from state import training_tasks
 from model import SimpleResNet, TextTransformerModel, ImageDataset, TextDataset
+from model_io import save_model
 
 # ==================== 工具函数：线程安全更新任务状态 ====================
 def update_task(tasks, task_id, **kwargs):
@@ -183,7 +184,7 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
 
         user_dir = f'models/{user_id}'
         makedirs(user_dir, exist_ok=True)
-        model_name = f'cnn_{task_id}_{int(time_now())}.pth'
+        model_name = f'cnn_{task_id}_{int(time_now())}.safetensors'
         model_path = path_join(user_dir, model_name)
 
         object.__setattr__(model, '_metadata', {
@@ -200,7 +201,7 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
         update_task(training_tasks, task_id,
                    progress=98,
                    message='⏳ 写入磁盘...')
-        torch.save(model, model_path)
+        save_model(model, model_path)
         file_size = getsize(model_path)
         total_time = time_now() - thread_start
         print(f"[CNN] ✅ 模型已保存: {model_path} ({file_size/1024/1024:.1f} MB)")
@@ -506,7 +507,7 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
 
         user_dir = f'models/{user_id}'
         makedirs(user_dir, exist_ok=True)
-        model_name = f'text_gen_{task_id}_{int(time_now())}.pth'
+        model_name = f'text_gen_{task_id}_{int(time_now())}.safetensors'
         model_path = path_join(user_dir, model_name)
 
         object.__setattr__(model, '_metadata', {
@@ -523,7 +524,7 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
         update_task(training_tasks, task_id,
                    progress=98,
                    message='⏳ 写入磁盘...')
-        torch.save(model, model_path)
+        save_model(model, model_path)
         file_size = getsize(model_path)
         total_time = time_now() - thread_start
         print(f"[Transformer] ✅ 模型已保存: {model_path} ({file_size/1024/1024:.1f} MB)")

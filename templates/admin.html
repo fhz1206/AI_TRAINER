@@ -258,6 +258,24 @@
                     </div>
                 </div>
             </div>
+            <!-- 存储清理 -->
+            <div class="card" style="margin:0 0 16px;">
+                <div class="card-header"><span class="icon">🧹</span><h3>存储清理</h3></div>
+                <div style="padding:0 4px;">
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0;">
+                        <span style="font-size:13px;color:var(--text-secondary);">自动清理保留天数（0=关闭）</span>
+                        <input type="number" id="retentionDaysInput" value="0" min="0" max="3650"
+                               style="width:80px;padding:6px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;text-align:center;outline:none;">
+                        <button class="btn-sm btn-primary-sm" onclick="setRetentionDays()">保存</button>
+                        <span style="flex:1;"></span>
+                        <button class="btn-sm" onclick="runCleanup(['models'])">清除模型文件</button>
+                        <button class="btn-sm" onclick="runCleanup(['uploads'])">清除上传数据</button>
+                        <button class="btn-sm" onclick="runCleanup(['logs'])">清除日志</button>
+                        <button class="btn-sm" onclick="runCleanup(['models','uploads','logs'])">全部清除</button>
+                    </div>
+                    <div id="cleanupStats" style="font-size:12px;color:var(--text-muted);">占用统计加载中...</div>
+                </div>
+            </div>
             <div class="table-wrap"><table>
                 <thead>
                     <tr>
@@ -593,6 +611,58 @@
         loadUsers();
         loadLogs();
         loadDeviceStatus();
+        loadCleanupStatus();
+
+        // 存储清理
+        function fmtSize(bytes) {
+            if (!bytes) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0, v = bytes;
+            while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+            return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + ' ' + units[i];
+        }
+
+        async function loadCleanupStatus() {
+            try {
+                const res = await fetch('/admin/api/cleanup/status');
+                const data = await res.json();
+                if (data.status !== 'success') return;
+                const c = data.cleanup;
+                document.getElementById('retentionDaysInput').value = c.config.retention_days;
+                document.getElementById('cleanupStats').textContent =
+                    `模型文件: ${c.models.count} 个 / ${fmtSize(c.models.size)} | 上传数据: ${c.uploads.count} 个 / ${fmtSize(c.uploads.size)} | 日志: ${c.logs.count} 个 / ${fmtSize(c.logs.size)}`;
+            } catch (e) { console.error('cleanup status failed:', e); }
+        }
+
+        async function setRetentionDays() {
+            const days = parseInt(document.getElementById('retentionDaysInput').value || '0', 10);
+            await fetch('/admin/api/cleanup/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ retention_days: days })
+            });
+            alert(days > 0 ? `自动清理已开启：保留 ${days} 天` : '自动清理已关闭');
+            loadCleanupStatus();
+        }
+
+        async function runCleanup(targets) {
+            const names = { models: '模型文件', uploads: '上传数据', logs: '日志' };
+            if (!confirm('确认清除：' + targets.map(t => names[t]).join('、') + '？此操作不可恢复')) return;
+            try {
+                const res = await fetch('/admin/api/cleanup/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targets })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`清理完成，释放 ${data.freed_mb} MB`);
+                    loadCleanupStatus();
+                } else {
+                    alert(data.message || '清理失败');
+                }
+            } catch (e) { alert('清理请求失败'); }
+        }
 
         // 实时监控（CPU/RAM 折线图）
         let monitorInterval = null;
@@ -676,9 +746,10 @@
             const maxVal = Math.min(100, Math.max(...data.map(d => d.value)) + 5);
             const range = maxVal - minVal || 1;
 
-            // 数据点转画布坐标
+            // 数据点转画布坐标（按实际点数铺满横轴，避免数据不足 MAX_POINTS 时挤在左侧）
+            const xDenom = Math.max(data.length - 1, 1);
             const pts = data.map((d, i) => ({
-                x: pad.left + (i / MAX_POINTS) * cw,
+                x: pad.left + (i / xDenom) * cw,
                 y: pad.top + (1 - (d.value - minVal) / range) * ch
             }));
 
@@ -694,27 +765,9 @@
                 ctx.fillText((maxVal - (range / 4) * i).toFixed(0), pad.left - 5, y + 3);
             }
 
-// 填充区域（平滑曲线）
-            ctx.beginPath();
-            ctx.moveTo(pts[pts.length - 1].x, pad.top + ch);
-            for (let i = pts.length - 1; i >= 0; i--) {
-                if (i === pts.length - 1) { ctx.lineTo(pts[i].x, pts[i].y); continue; }
-                const p0 = pts[i + 1 >= pts.length ? pts.length - 1 : i + 1];
-                const p1 = pts[i];
-                const p2 = pts[i === 0 ? 0 : i - 1];
-                const p3 = pts[i - 1 < 0 ? 0 : i - 2];
-                const t = 0.3;
-                // 安全访问：确保数组索引不越界
-                const p0x = p0.x, p0y = p0.y;
-                const p1x = p1.x, p1y = p1.y;
-                const p2x = p2.x, p2y = p2.y;
-                const p3x = p3 ? p3.x : p2x, p3y = p3 ? p3.y : p2y;
-                ctx.bezierCurveTo(
-                    p1x + (p2x - p0x) * t, p1y + (p2y - p0y) * t,
-                    p2x - (p3x - p1x) * t, p2y - (p3y - p1y) * t,
-                    p2x, p2y
-                );
-            }
+// 填充区域（复用平滑曲线路径，保证填充边界与描边一致）
+            smoothCurve(pts, ctx, false);
+            ctx.lineTo(pts[pts.length - 1].x, pad.top + ch);
             ctx.lineTo(pts[0].x, pad.top + ch);
             ctx.closePath();
             const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
