@@ -21,10 +21,11 @@ __pycache__/
 logs/
 *.log
 *.db
-uploads/
-models/
-test_data/
-output/
-
+*uploads/
+*models/
+*test_data/
+*output/
+*.atomcode/
+.gitignore
 # 临时资源
 tokenizer/*.json
