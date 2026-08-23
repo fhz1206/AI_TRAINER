@@ -1,4 +1,10 @@
+<div align="center">
+
+<img src="AI_TRAINER-logo.png" alt="AI_TRAINER Logo" width="260"/>
+
 # 统一训练平台
+
+</div>
 
 > 基于 Flask + PyTorch 的深度学习训练与测试平台，支持 CNN 图像分类和 Transformer 文本生成模型的全流程训练、管理与测试。
 
