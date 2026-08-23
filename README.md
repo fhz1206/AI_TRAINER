@@ -10,7 +10,7 @@
 # 使用说明查找表
 | 用户使用说明 | 管理员使用说明 |
 |------|------|
-| DirectionsUser.md | DirectionsAdmin.md |
+| [docs/DirectionsUser.md](docs/DirectionsUser.md) | [docs/DirectionsAdmin.md](docs/DirectionsAdmin.md) |
 ---
 
 # 预计更新
@@ -82,6 +82,10 @@ Windows_ITPP/
 │   ├── ai.html             # AI 基础学习
 │   ├── profile.html        # 账号主页
 │   └── admin.html          # 管理员面板
+├── docs/
+│   ├── DirectionsUser.md   # 用户使用说明
+│   ├── DirectionsAdmin.md  # 管理员使用说明
+│   └── EXTENSION_DEV.md    # 扩展开发指南（CodeMate 联动）
 ├── tokenizer/
 │   └── tokenizer.json  # BPE 分词模型
 ├── uploads/                # 训练数据
