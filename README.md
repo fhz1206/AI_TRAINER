@@ -4,8 +4,7 @@
 
 > 用户和管理员的使用说明请查看使用说明查找表
 
->AI_TRAINER x CodeMate（https://gitcode.com/fhz1206/CodeMate） x CostCut-Infer（https://gitcode.com/fhz1206/CostCut-Infer
-）
+> **生态联动**：AI_TRAINER <img src="AI_TRAINER-logo.png" width="18"/> × [CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer)
 ---
 # 使用说明查找表
 | 用户使用说明 | 管理员使用说明 |
