@@ -45,6 +45,16 @@ class LRUCache:
         with self.lock:
             self.cache.clear()
 
+    def __getstate__(self):
+        # Lock 不可跨进程序列化：交给 pickle 时剥离，载入侧重建
+        state = self.__dict__.copy()
+        state['lock'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.lock = Lock()
+
 # -------------------------- 数据集类 --------------------------
 class ImageDataset(Dataset):
     """图像分类数据集，支持任意层级目录结构，自动推断类别，自带LRU缓存"""

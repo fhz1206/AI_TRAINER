@@ -13,7 +13,7 @@ import math
 from os import makedirs
 from os.path import join as path_join, getsize
 from random import seed as random_seed
-from time import sleep, time as time_now
+from time import time as time_now
 
 import torch
 import torch.nn as nn
@@ -29,6 +29,35 @@ from database import save_model_record
 from state import training_tasks
 from model import SimpleResNet, TextTransformerModel, ImageDataset, TextDataset
 from model_io import save_model
+
+
+def _dataloader_workers():
+    """DataLoader 工作进程数：半数CPU、上限4；可用 AITPP_DATALOADER_WORKERS 覆盖（0=单进程）"""
+    env = os.environ.get('AITPP_DATALOADER_WORKERS')
+    if env is not None:
+        try:
+            return max(0, int(env))
+        except ValueError:
+            pass
+    return max(1, min(4, (os.cpu_count() or 2) // 2))
+
+
+def _multiproc_loader_ok():
+    """探测当前进程能否 spawn 子进程（打包 exe / stdin 等受限场景返回 False）"""
+    import multiprocessing as mp
+    try:
+        if mp.get_start_method(allow_none=True) != 'spawn':
+            mp.set_start_method('spawn', force=True)
+        p = mp.Process(target=_noop_probe)
+        p.start()
+        p.join(timeout=15)
+        return p.exitcode == 0
+    except Exception:
+        return False
+
+
+def _noop_probe():
+    pass
 
 # ==================== 工具函数：线程安全更新任务状态 ====================
 def update_task(tasks, task_id, **kwargs):
@@ -65,7 +94,6 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
             update_task(training_tasks, task_id,
                        progress=scan_pct,
                        message=f'🔍 {msg}')
-            sleep(0.01)
 
         update_task(training_tasks, task_id, message='🔍 开始扫描图片数据集...')
 
@@ -83,7 +111,6 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
         update_task(training_tasks, task_id,
                    progress=20,
                    message='🧠 构建CNN模型...')
-        sleep(0.1)
 
         model = SimpleResNet(
             image_size=model_params.get('image_size', 224),
@@ -95,18 +122,32 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
         param_count = sum(p.numel() for p in model.parameters())
         print(f"[CNN] 模型参数量: {param_count:,}")
 
+        # 可选加速：torch.compile（设环境变量 AITPP_TORCH_COMPILE=1 开启；失败自动回退）
+        # 前向走 run_model；保存/评估始终用原始 model，避免编译包装层改变权重键名
+        run_model = model
+        if os.environ.get('AITPP_TORCH_COMPILE') == '1':
+            try:
+                run_model = torch.compile(model)
+                print("[CNN] torch.compile 已启用")
+            except Exception as e:
+                print(f"[CNN] torch.compile 启用失败，使用 eager 模式: {e}")
+
         # ===== 第3步：构建DataLoader =====
         update_task(training_tasks, task_id,
                    progress=25,
                    message='📦 准备数据加载器...')
-        sleep(0.05)
 
+        _workers = _dataloader_workers()
+        if _workers > 0 and not _multiproc_loader_ok():
+            _workers = 0
+            print("[CNN] 多进程加载不可用，回退单进程")
         loader = DataLoader(
             dataset,
             batch_size=train_params['batch_size'],
             shuffle=True,
-            num_workers=0,
-            pin_memory=False,
+            num_workers=_workers,
+            pin_memory=True,
+            persistent_workers=_workers > 0,
             drop_last=True
         )
 
@@ -126,7 +167,6 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
         update_task(training_tasks, task_id,
                    progress=26,
                    message='🚀 训练启动...')
-        sleep(0.1)
 
         for epoch in range(train_params['epochs']):
             epoch_start = time_now()
@@ -137,7 +177,7 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
 
             for batch_idx, (imgs, labels) in enumerate(loader):
                 opt.zero_grad()
-                outputs = model(imgs)
+                outputs = run_model(imgs)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 opt.step()
@@ -163,9 +203,6 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
                     )
                 })
 
-                if batch_idx % 5 == 0 or batch_idx == len(loader) - 1:
-                    sleep(0.01)
-
             epoch_time = time_now() - epoch_start
             avg_loss = total_loss / len(loader)
             avg_acc = 100. * correct / max(total, 1)
@@ -180,7 +217,6 @@ def train_image_model(user_id, task_id, model_params, train_params, training_tas
         update_task(training_tasks, task_id,
                    progress=96,
                    message='💾 正在保存模型...')
-        sleep(0.1)
 
         user_dir = f'models/{user_id}'
         makedirs(user_dir, exist_ok=True)
@@ -273,7 +309,6 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
             update_task(training_tasks, task_id,
                        progress=scan_pct,
                        message=f'🔍 {msg}')
-            sleep(0.01)
 
         update_task(training_tasks, task_id, message='🔍 开始扫描文本训练数据...')
 
@@ -291,7 +326,6 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
         update_task(training_tasks, task_id,
                    progress=20,
                    message='🧠 构建生成式Transformer模型...')
-        sleep(0.1)
 
         model = TextTransformerModel(
             vocab_size=model_params.get('vocab_size', 1000),
@@ -313,17 +347,31 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
         param_count = sum(p.numel() for p in model.parameters())
         print(f"[Transformer] 模型参数量: {param_count:,}")
 
+        # 可选加速：torch.compile（设环境变量 AITPP_TORCH_COMPILE=1 开启；失败自动回退）
+        # 前向走 run_model；保存/评估始终用原始 model，避免编译包装层改变权重键名
+        run_model = model
+        if os.environ.get('AITPP_TORCH_COMPILE') == '1':
+            try:
+                run_model = torch.compile(model)
+                print("[Transformer] torch.compile 已启用")
+            except Exception as e:
+                print(f"[Transformer] torch.compile 启用失败，使用 eager 模式: {e}")
+
         # ===== 第3步：构建DataLoader =====
         update_task(training_tasks, task_id,
                    progress=25,
                    message='📦 准备数据加载器...')
-        sleep(0.05)
 
+        _workers = _dataloader_workers()
+        if _workers > 0 and not _multiproc_loader_ok():
+            _workers = 0
+            print("[Transformer] 多进程加载不可用，回退单进程")
         loader = DataLoader(
             dataset,
             batch_size=train_params.get('batch_size', 16),  # 默认改小，更稳定
             shuffle=True,
-            num_workers=0,
+            num_workers=_workers,
+            persistent_workers=_workers > 0,
             drop_last=True
         )
 
@@ -354,7 +402,6 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
         update_task(training_tasks, task_id,
                    progress=26,
                    message='🚀 训练启动...')
-        sleep(0.1)
 
         for epoch in range(train_params['epochs']):
             epoch_start = time_now()
@@ -365,7 +412,7 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
             with torch.no_grad():
                 try:
                     val_input, val_label = val_batch
-                    val_logits = model(val_input)
+                    val_logits = run_model(val_input)
                     # 检测验证输出是否有nan/inf
                     if torch.isnan(val_logits).any() or torch.isinf(val_logits).any():
                         raise RuntimeError("模型验证输出存在nan/inf，前向传播存在数值bug，终止训练")
@@ -392,9 +439,9 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
                 
                 # 前向传播（支持MoE）
                 if model.use_moe:
-                    logits, aux_loss = model(input_ids, return_aux_loss=True)
+                    logits, aux_loss = run_model(input_ids, return_aux_loss=True)
                 else:
-                    logits = model(input_ids)
+                    logits = run_model(input_ids)
                     aux_loss = torch.tensor(0.0, device=logits.device)
 
                 # 计算损失
@@ -474,9 +521,6 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
                     last_checkpoint_step = batch_count
                     print(f"[Transformer] 已保存Checkpoint: {checkpoint_path}")
 
-                if batch_idx % 5 == 0 or batch_idx == len(loader) - 1:
-                    sleep(0.01)
-
             # Epoch结束统计
             epoch_time = time_now() - epoch_start
             avg_loss = total_loss / len(loader)
@@ -497,7 +541,6 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
         update_task(training_tasks, task_id,
                    progress=96,
                    message='💾 正在保存模型...')
-        sleep(0.1)
 
         # 保存前全量检测参数
         has_nan = any(torch.isnan(p).any() for p in model.parameters())
