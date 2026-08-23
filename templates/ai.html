@@ -28,6 +28,7 @@
             <li><a href="#hyper" class="nav-link">超参数与优化器</a></li>
             <li><a href="#metrics" class="nav-link">评价指标</a></li>
             <li><a href="#sampling" class="nav-link">采样与文本生成</a></li>
+            <li><a href="#finetune" class="nav-link">微调入门</a></li>
             <li><a href="#glossary" class="nav-link">术语速查表</a></li>
         </ul>
         <div class="nav-user-info">
@@ -73,7 +74,7 @@
         <section id="embedding">
             <h2>🔢 词嵌入 (Embedding)</h2>
             <div class="card">
-                <p>每个 Token 被转换为一个高维向量，捕捉语义信息。语义相近的词在向量空间中距离更近。</p>
+                <p>模型不认识文字，只认识数字。<strong>词嵌入</strong>就是把每个 Token 变成一串数字（相当于坐标），意思相近的词，坐标也挨得近。</p>
                 <p>例子：<strong>"猫"</strong> 和 <strong>"狗"</strong> 的向量距离很近，而 <strong>"猫"</strong> 和 <strong>"汽车"</strong> 的距离较远。</p>
 
                 <div class="interactive-area">
@@ -95,12 +96,8 @@
         <section id="attention">
             <h2>🎯 注意力机制入门</h2>
             <div class="card">
-                <p>自注意力让模型在处理一个 Token 时，能够"关注"输入序列中的其他所有 Token，从而理解上下文关系。</p>
-                <ul class="feature-list">
-                    <li><strong>Q (Query)：</strong>当前 Token 在找什么</li>
-                    <li><strong>K (Key)：</strong>其他 Token 能提供什么</li>
-                    <li><strong>V (Value)：</strong>其他 Token 的实际内容</li>
-                </ul>
+                <p>自注意力让模型处理每个词时，自动"环顾"句子里相关的词来加深理解。比如读「苹果发布新手机」时，模型会把「苹果」和「手机」关联起来，判断这是科技公司而不是水果。</p>
+                <p class="tip-text">💡 内部的 Q/K/V 只需知道作用：它们是模型「查找相关词 → 衡量该看谁 → 取回内容」的三步工具，具体计算公式不用深究。</p>
 
                 <div class="interactive-area">
                     <h3 class="interactive-title">🔍 交互演示：自注意力计算过程</h3>
@@ -143,7 +140,7 @@
                         <div class="metric-chip"><span>当前 PPL</span><strong id="currentPpl">—</strong></div>
                         <div class="metric-chip"><span>训练轮数</span><strong id="epochCount">0</strong></div>
                     </div>
-                    <p class="tip-text">💡 损失曲线下降越快越平滑，说明模型训练效果越好。PPL = e<sup>Loss</sup>，Loss 每降低 1.0，PPL 缩小约 2.7 倍。</p>
+                    <p class="tip-text">💡 记住结论即可：两条曲线都是<strong>越低越好</strong>。PPL 可以理解为「模型猜下一个字时平均在几个选项里纠结」，从词表大小一路降到个位数，说明模型学得不错。</p>
                 </div>
             </div>
         </section>
@@ -153,11 +150,11 @@
             <h2>🎯 人工智能核心基础：梯度与优化</h2>
             <div class="card">
                 <h3>什么是梯度？</h3>
-                <p>梯度是机器学习中最核心的概念之一，你可以把它理解为<strong>「函数增长最快的方向的向导」</strong>：</p>
+                <p>训练模型就像<strong>蒙着眼睛下山找谷底</strong>：谷底就是「预测最准」的状态。你不需要全景地图，只需每次朝脚下最陡的下坡方向迈一步：</p>
                 <ul class="feature-list">
-                    <li>在模型训练中，我们需要最小化「损失函数」（衡量模型预测和真实结果的差距）</li>
-                    <li>梯度是损失函数对每个参数的偏导数组成的向量，指向函数值<strong>上升最快</strong>的方向</li>
-                    <li>梯度下降算法的核心逻辑：<strong>往梯度的反方向更新参数</strong>，就能一步步走到损失函数的最小值点，让模型预测越来越准</li>
+                    <li><strong>损失函数：</strong>你当前的海拔——数值越大，模型错得越离谱</li>
+                    <li><strong>梯度：</strong>脚下坡度最陡的方向，它告诉模型<strong>往哪边调、调多急</strong></li>
+                    <li><strong>梯度下降：</strong>朝梯度的反方向走一小步，反复迭代就能走到谷底（误差最小处）</li>
                 </ul>
 
                 <div class="interactive-area">
@@ -180,8 +177,7 @@
         <section id="transformer">
             <h2>🧠 Transformer 架构概览</h2>
             <div class="card">
-                <p>Transformer 由编码器(Encoder)和解码器(Decoder)组成，现代大模型（如 GPT、LLaMA）通常只使用解码器部分。</p>
-                <p><strong>数据流：</strong>输入 → 嵌入 → 多层注意力 → 输出</p>
+                <p><strong>Transformer</strong> 是当今几乎所有大模型（GPT、LLaMA、本平台的文本模型）共用的"骨架"。你只需要记住它的<strong>数据流</strong>：文字进来 → 变成数字 → 经过多层注意力互相"交流" → 输出结果。至于内部几十层怎么堆叠，初学阶段不必深究。</p>
 
                 <div class="interactive-area">
                     <h3 class="interactive-title">✨ 动画演示：数据流动过程</h3>
@@ -412,6 +408,32 @@
             </div>
         </section>
 
+        <!-- 微调入门 -->
+        <section id="finetune">
+            <h2>🎯 微调入门：站在大模型的肩膀上</h2>
+            <div class="card">
+                <p>训练一个全新的大模型要耗费海量数据与算力；<strong>微调（Fine-tuning）</strong>是更聪明的做法——拿一个已经训练好的模型，用少量自己的数据"再教它几课"，让它适应你的具体任务。</p>
+                <ul class="feature-list">
+                    <li><strong>为什么有效：</strong>预训练模型已经学会了通用的语言/视觉规律，微调只需在它基础上做小幅调整，就像招一个有经验的员工稍加培训即可上岗</li>
+                    <li><strong>全量微调：</strong>更新模型所有参数。效果最好，但显存和算力开销巨大，个人设备很难承受</li>
+                    <li><strong>LoRA（主流方案）：</strong>冻结原模型，只训练一小块插入的"外挂"参数（常只有原模型的百分之几）。训练快、显存省、效果接近全量微调</li>
+                    <li><strong>提示工程对比：</strong>不改参数、只优化输入措辞的是 Prompt 工程；改动参数让模型真正学会新能力的是微调</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 三种"教模型"方式对比</h3>
+                    <table class="hyper-table">
+                        <thead><tr><th>方式</th><th>改什么</th><th>成本</th><th>适合场景</th></tr></thead>
+                        <tbody>
+                            <tr><td>Prompt 提示词</td><td>什么都不改，只改问法</td><td>几乎为零</td><td>通用能力已够用，只是要引导一下</td></tr>
+                            <tr><td>LoRA 微调</td><td>少量新增参数</td><td>低（单卡可行）</td><td>让模型学会特定风格 / 领域知识</td></tr>
+                            <tr><td>全量微调</td><td>全部参数</td><td>极高（多卡集群）</td><td>深度改造模型行为</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="tip-text">💡 本平台训练 CNN / 小型 Transformer 属于「从零训练」，数据量要求不高也能出效果；将来若接触大模型，LoRA 微调是最常见的入门路径。</p>
+            </div>
+        </section>
+
         <!-- 术语速查表 -->
         <section id="glossary">
             <h2>📖 核心术语速查表</h2>
@@ -428,9 +450,11 @@
                         <tr><td>Batch / Epoch</td><td>一次更新的样本组 / 完整过一遍训练集</td></tr>
                         <tr><td>Checkpoint</td><td>训练中途保存的模型快照，用于断点续训</td></tr>
                         <tr><td>Safetensors</td><td>本平台新模型格式：只存权重的安全序列化格式（替代 pickle 的 .pth）</td></tr>
-                        <tr><td>MoE</td><td>Mixture of Experts：多个专家网络 + 门控路由，按需激活部分专家</td></tr>
-                        <tr><td>MLA</td><td>Multi-head Latent Attention：低秩压缩 KV 缓存的注意力变体</td></tr>
+                        <tr><td>MoE</td><td>Mixture of Experts：多个"专家"网络分工合作，每次只用其中几个，省算力的技巧</td></tr>
+                        <tr><td>MLA</td><td>一种节省内存的注意力优化技术（了解名字即可）</td></tr>
                         <tr><td>PPL（困惑度）</td><td>e^Loss，衡量语言模型对下文的不确定程度</td></tr>
+                        <tr><td>微调（Fine-tuning）</td><td>在预训练模型上用少量数据继续训练，适配具体任务</td></tr>
+                        <tr><td>LoRA</td><td>低秩适配微调：冻结原模型只训小参数量"外挂"，低成本定制大模型</td></tr>
                     </tbody>
                 </table>
             </div>
