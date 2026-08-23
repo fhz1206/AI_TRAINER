@@ -92,95 +92,11 @@ except Exception as e:
     input()
     sys.exit(1)
 
-# ==================== 全局请求日志系统（写入单个 .log 文件） ====================
-import logging as _logging
-from datetime import datetime as _datetime
-from flask import request as _flask_request
-import json as _json
-import time as _time
+# ==================== 全局请求日志系统（RotatingFileHandler 轮转 + 内存友好） ====================
+# 实现已抽取到独立模块：磁盘有界（单文件5MB×5备份）、不缓冲请求/响应体、不记录敏感头
+from app_logger import init_app_logger
 
-_logger = _logging.getLogger('app_access')
-_logger.setLevel(_logging.INFO)
-_log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.log')
-_log_handler = _logging.FileHandler(_log_file, encoding='utf-8')
-_log_handler.setFormatter(_logging.Formatter('%(message)s'))
-_logger.handlers.clear()
-_logger.addHandler(_log_handler)
-_logger.propagate = False
-
-@app.before_request
-def _log_before_request():
-    _flask_request._request_start_time = _time.time()
-    # 记录请求体大小（用于上行带宽统计）
-    try:
-        req_data = _flask_request.get_data()
-        _flask_request._request_bytes = len(req_data)
-    except:
-        _flask_request._request_bytes = 0
-
-@app.after_request
-def _log_after_request(response):
-    start_time = getattr(_flask_request, '_request_start_time', _time.time())
-    duration_ms = (_time.time() - start_time) * 1000
-    now_str = _datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-
-    # 带宽统计（上行+下行）
-    try:
-        from flask import session as _session
-        uid = _session.get('user_id')
-        if uid:
-            req_bytes = getattr(_flask_request, '_request_bytes', 0)
-            resp_bytes = len(response.get_data() or b'')
-            total_bytes = req_bytes + resp_bytes
-            from state import track_bandwidth
-            exceeded, cur_mbps, limit = track_bandwidth(uid, total_bytes)
-            if exceeded:
-                # 超出带宽限制，添加响应头标记
-                response.headers['X-RateLimit-Limit'] = str(limit)
-                response.headers['X-RateLimit-Remaining'] = '0'
-    except:
-        pass
-
-    # 请求体
-    body = ''
-    content_type = _flask_request.content_type or ''
-    if _flask_request.method in ('POST', 'PUT', 'PATCH'):
-        if 'application/json' in content_type:
-            body = _flask_request.get_data(as_text=True)[:2000]
-        elif 'multipart/form-data' in content_type:
-            body = f'<multipart form, {len(_flask_request.get_data() or b"")} bytes>'
-        else:
-            body = _flask_request.get_data(as_text=True)[:1000]
-
-    # 响应体
-    resp_body = ''
-    try:
-        resp_body = response.get_data(as_text=True)[:2000]
-    except:
-        resp_body = f'<binary, {response.content_length or 0} bytes>'
-
-    # 用户信息
-    user_id = ''
-    try:
-        from flask import session as _session
-        user_id = str(_session.get('user_id', ''))
-    except:
-        pass
-
-    log_lines = [
-        f'[REQUEST]  {now_str}',
-        f'  IP:       {_flask_request.remote_addr}',
-        f'  User:     {user_id or "(anonymous)"}',
-        f'  Method:   {_flask_request.method}',
-        f'  Path:     {_flask_request.full_path}',
-        f'  Headers:  {dict(_flask_request.headers)}',
-        f'  Body:     {body}',
-        f'[RESPONSE] {response.status_code} ({duration_ms:.1f}ms)',
-        f'  Content:  {resp_body}',
-        f'{"="*80}',
-    ]
-    _logger.info('\n'.join(log_lines))
-    return response
+init_app_logger(app)
 
 # ==================== 服务启动 ====================
 if __name__ == '__main__':

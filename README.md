@@ -51,7 +51,8 @@
 
 ```
 Windows_ITPP/
-├── app.py                  # 应用入口（启动进度条 + 全局请求日志）
+├── app.py                  # 应用入口（启动进度条 + 服务启动）
+├── app_logger.py           # 全局请求日志（轮转 + 内存友好）
 ├── config.py               # 全局配置
 ├── database.py             # SQLite3 数据库管理
 ├── model.py                # 模型定义 + 数据集类
@@ -157,6 +158,12 @@ python app.py
 | GET | `/admin/api/logs` | 全部行为日志 |
 | GET | `/admin/api/device_status` | 设备状态信息 |
 | GET | `/admin/api/monitor` | 实时 CPU/RAM 监控 |
+| GET | `/admin/api/queue` | 训练队列状态 |
+| POST | `/admin/api/queue/max_concurrent` | 设置最大并发数 |
+| POST | `/admin/api/queue/cancel/<id>` | 取消/停止训练任务 |
+| GET | `/admin/api/bandwidth` | 带宽使用统计 |
+| POST | `/admin/api/bandwidth/default` | 设置默认带宽限制 |
+| POST | `/admin/api/bandwidth/user/<id>` | 设置用户带宽限制 |
 
 ---
 

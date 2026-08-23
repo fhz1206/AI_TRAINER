@@ -10,3 +10,4 @@ mediapipe>=0.10
 matplotlib>=3.7
 pandas>=2.0
 tokenizers>=0.15
+psutil>=5.9

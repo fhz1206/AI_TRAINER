@@ -1,0 +1,30 @@
+# 虚拟环境
+venv/
+.venv/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+
+# 大体积生成文件（训练得到的模型权重）
+*.pth
+*.pt
+*.h5
+
+# 运行时产物：日志 / 数据库 / 用户数据 / 打包输出
+logs/
+*.log
+*.db
+uploads/
+models/
+test_data/
+output/
+
+# 临时资源
+tokenizer/*.json
