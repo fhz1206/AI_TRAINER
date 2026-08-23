@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initLossDemo();
     initGradientDemo();
     initTransformerTooltip();
+    initActivationChart();
+    initConvDemo();
+    initTempDemo();
 });
 
 // ================================= 0. 粒子背景 =================================
@@ -884,4 +887,159 @@ function initLossDemo() {
     window.addEventListener('resize', () => {
         if (lossHistory.length > 0) { const { w, h } = setupCanvas(); drawLossChart(w, h); }
     });
+}
+
+// ================================= 6. 激活函数曲线对比（静态绘制） =================================
+function initActivationChart() {
+    const canvas = document.getElementById('actCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const pad = { top: 20, bottom: 30, left: 45, right: 15 };
+    const xMin = -5, xMax = 5, yMin = -1.2, yMax = 3;
+
+    const sigmoid = x => 1 / (1 + Math.exp(-x));
+    const tanh = x => Math.tanh(x);
+    const relu = x => Math.max(0, x);
+    const gelu = x => 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * x ** 3)));
+
+    function toX(x) { return pad.left + ((x - xMin) / (xMax - xMin)) * (W - pad.left - pad.right); }
+    function toY(y) { return pad.top + (1 - (y - yMin) / (yMax - yMin)) * (H - pad.top - pad.bottom); }
+
+    ctx.clearRect(0, 0, W, H);
+    // 网格与坐标轴
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.lineWidth = 1;
+    for (let gx = xMin; gx <= xMax; gx++) {
+        ctx.beginPath(); ctx.moveTo(toX(gx), pad.top); ctx.lineTo(toX(gx), H - pad.bottom); ctx.stroke();
+        if (gx % 2 === 0) ctx.fillText(gx, toX(gx) - 6, H - pad.bottom + 16);
+    }
+    for (let gy = yMin; gy <= yMax; gy++) {
+        ctx.beginPath(); ctx.moveTo(pad.left, toY(gy)); ctx.lineTo(W - pad.right, toY(gy)); ctx.stroke();
+        if (Number.isInteger(gy)) ctx.fillText(gy, pad.left - 22, toY(gy) + 4);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.moveTo(pad.left, toY(0)); ctx.lineTo(W - pad.right, toY(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(toX(0), pad.top); ctx.lineTo(toX(0), H - pad.bottom); ctx.stroke();
+
+    function plot(fn, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        let started = false;
+        for (let px = pad.left; px <= W - pad.right; px += 2) {
+            const x = xMin + ((px - pad.left) / (W - pad.left - pad.right)) * (xMax - xMin);
+            const y = fn(x);
+            if (!isFinite(y)) { started = false; continue; }
+            const py = Math.max(pad.top - 40, Math.min(H - pad.bottom + 40, toY(y)));
+            if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    }
+
+    plot(sigmoid, '#ef4444');
+    plot(tanh, '#f59e0b');
+    plot(relu, '#22c55e');
+    plot(gelu, '#818cf8');
+}
+
+// ================================= 7. 卷积扫描动画 =================================
+function initConvDemo() {
+    const gridEl = document.getElementById('convGrid');
+    const outEl = document.getElementById('convOut');
+    if (!gridEl || !outEl) return;
+
+    const IN = 6, OUT = 4, CELL = 34;
+    // 固定的"边缘检测"式权重，让输出有可解释的高低响应
+    const kernel = [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]];
+    const input = [];
+    let seed = 42;
+    const rand = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    for (let r = 0; r < IN; r++) {
+        input.push([]);
+        for (let c = 0; c < IN; c++) input[r].push(rand());
+    }
+
+    gridEl.style.gridTemplateColumns = `repeat(${IN}, ${CELL}px)`;
+    outEl.style.gridTemplateColumns = `repeat(${OUT}, ${CELL}px)`;
+    const cells = [], outCells = [];
+    for (let r = 0; r < IN; r++) for (let c = 0; c < IN; c++) {
+        const d = document.createElement('div');
+        d.className = 'conv-cell';
+        d.style.opacity = 0.25 + input[r][c] * 0.75;
+        gridEl.appendChild(d); cells.push(d);
+    }
+    for (let i = 0; i < OUT * OUT; i++) {
+        const d = document.createElement('div');
+        d.className = 'conv-cell out-cell';
+        outEl.appendChild(d); outCells.push(d);
+    }
+
+    let step = 0;
+    function compute(or_, oc) {
+        let s = 0;
+        for (let kr = 0; kr < 3; kr++) for (let kc = 0; kc < 3; kc++)
+            s += input[or_ + kr][oc + kc] * kernel[kr][kc];
+        return s;
+    }
+    function tick() {
+        cells.forEach(c => c.classList.remove('active'));
+        if (step >= OUT * OUT) {
+            step = 0;
+            outCells.forEach(c => { c.classList.remove('hot'); c.textContent = ''; });
+        } else {
+            const or_ = Math.floor(step / OUT), oc = step % OUT;
+            for (let kr = 0; kr < 3; kr++) for (let kc = 0; kc < 3; kc++)
+                cells[(or_ + kr) * IN + (oc + kc)].classList.add('active');
+            const val = compute(or_, oc);
+            const cell = outCells[step];
+            cell.classList.add('hot');
+            cell.style.setProperty('--heat', Math.min(1, Math.abs(val) / 2).toFixed(2));
+            cell.textContent = (val >= 0 ? '+' : '') + val.toFixed(1);
+            step++;
+        }
+        setTimeout(tick, 700);
+    }
+    tick();
+}
+
+// ================================= 8. 温度采样概率条 =================================
+function initTempDemo() {
+    const slider = document.getElementById('tempSlider');
+    const valueEl = document.getElementById('tempValue');
+    const barsEl = document.getElementById('probBars');
+    if (!slider || !barsEl) return;
+
+    const candidates = [
+        { ch: '天', logit: 3.0 }, { ch: '很', logit: 2.5 },
+        { ch: '气', logit: 2.0 }, { ch: '香', logit: 1.0 },
+    ];
+
+    function softmaxT(logits, T) {
+        const scaled = logits.map(l => l / T);
+        const m = Math.max(...scaled);
+        const exps = scaled.map(s => Math.exp(s - m));
+        const sum = exps.reduce((a, b) => a + b, 0);
+        return exps.map(e => e / sum);
+    }
+
+    function render(T) {
+        valueEl.textContent = T.toFixed(1);
+        const probs = softmaxT(candidates.map(c => c.logit), T);
+        barsEl.innerHTML = '';
+        candidates.forEach((c, i) => {
+            const row = document.createElement('div');
+            row.className = 'prob-row';
+            row.innerHTML =
+                `<span class="prob-label">「${c.ch}」</span>` +
+                `<div class="prob-track"><div class="prob-fill" style="width:${(probs[i] * 100).toFixed(1)}%"></div></div>` +
+                `<span class="prob-pct">${(probs[i] * 100).toFixed(1)}%</span>`;
+            barsEl.appendChild(row);
+        });
+    }
+
+    slider.addEventListener('input', () => render(parseFloat(slider.value)));
+    render(0.8);
 }

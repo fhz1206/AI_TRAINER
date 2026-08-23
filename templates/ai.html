@@ -16,8 +16,19 @@
             <li><a href="#token" class="nav-link">分词与Token</a></li>
             <li><a href="#embedding" class="nav-link">词嵌入</a></li>
             <li><a href="#attention" class="nav-link">注意力机制</a></li>
+            <li><a href="#loss" class="nav-link">损失与困惑度</a></li>
             <li><a href="#gradient" class="nav-link">梯度基础</a></li>
             <li><a href="#transformer" class="nav-link">Transformer</a></li>
+            <li class="nav-divider"></li>
+            <li><a href="#aiml" class="nav-link">AI · ML · DL</a></li>
+            <li><a href="#nn" class="nav-link">神经网络基础</a></li>
+            <li><a href="#activation" class="nav-link">激活函数</a></li>
+            <li><a href="#cnn" class="nav-link">CNN 卷积网络</a></li>
+            <li><a href="#data" class="nav-link">数据集与过拟合</a></li>
+            <li><a href="#hyper" class="nav-link">超参数与优化器</a></li>
+            <li><a href="#metrics" class="nav-link">评价指标</a></li>
+            <li><a href="#sampling" class="nav-link">采样与文本生成</a></li>
+            <li><a href="#glossary" class="nav-link">术语速查表</a></li>
         </ul>
         <div class="nav-user-info">
             <span class="username">{{ username }}</span>
@@ -136,6 +147,9 @@
                 </div>
             </div>
         </section>
+
+        <!-- 梯度 -->
+        <section id="gradient">
             <h2>🎯 人工智能核心基础：梯度与优化</h2>
             <div class="card">
                 <h3>什么是梯度？</h3>
@@ -196,6 +210,232 @@
                 </div>
             </div>
         </section>
+
+        <!-- AI / ML / DL -->
+        <section id="aiml">
+            <h2>🌐 AI、机器学习与深度学习的关系</h2>
+            <div class="card">
+                <p>三者是<strong>逐层包含</strong>的关系，不是同义词：</p>
+                <ul class="feature-list">
+                    <li><strong>人工智能（AI）：</strong>最大的概念——让机器表现出"智能"行为的全部技术总称，包括规则系统、搜索算法、专家系统等</li>
+                    <li><strong>机器学习（ML）：</strong>AI 的子集——不再手写规则，而是让程序<strong>从数据中自动学习规律</strong>。典型算法：线性回归、决策树、SVM</li>
+                    <li><strong>深度学习（DL）：</strong>ML 的子集——用<strong>多层神经网络</strong>自动提取特征。本平台的 CNN 与 Transformer 都属于 DL</li>
+                </ul>
+                <p class="tip-text">💡 判断标准：需要人工设计特征（提取边缘、统计词频）的是传统 ML；原始数据直接进网络、特征由模型自己学的是 DL。</p>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 三层包含关系一览</h3>
+                    <div class="venn-stack">
+                        <div class="venn-layer venn-ai">人工智能 AI<span>让机器表现出"智能"行为</span></div>
+                        <div class="venn-layer venn-ml">机器学习 ML<span>从数据中自动学习规律</span></div>
+                        <div class="venn-layer venn-dl">深度学习 DL<span>多层神经网络 · 本平台的核心技术</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 神经网络基础 -->
+        <section id="nn">
+            <h2>🕸️ 神经网络基础：从神经元到网络</h2>
+            <div class="card">
+                <p><strong>神经元（Neuron）</strong>是神经网络的最小单元，工作方式模仿生物神经元：</p>
+                <ul class="feature-list">
+                    <li><strong>加权求和：</strong>z = w₁x₁ + w₂x₂ + … + b（w 是权重 weight，b 是偏置 bias）</li>
+                    <li><strong>激活函数：</strong>对求和结果做非线性变换（下一节详解），没有它再深的网络也只能表达直线关系</li>
+                    <li><strong>层级结构：</strong>输入层接收数据 → 隐藏层逐层提取特征 → 输出层给出预测结果</li>
+                    <li><strong>"深度"的含义：</strong>隐藏层的层数。层数越多，能表达的抽象特征越复杂（边缘 → 纹理 → 部件 → 整体）</li>
+                </ul>
+                <p class="tip-text">💡 训练的本质就是不断调整所有 w 和 b 让预测误差变小——调整的依据正是「梯度」。</p>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 一个神经元在做什么？</h3>
+                    <div class="neuron-demo">
+                        <span class="neuron-chip">x₁=2.0</span><span class="neuron-op">×</span>
+                        <span class="neuron-chip chip-w">w₁=0.5</span>
+                        <span class="neuron-plus">＋</span>
+                        <span class="neuron-chip">x₂=1.0</span><span class="neuron-op">×</span>
+                        <span class="neuron-chip chip-w">w₂=−0.3</span>
+                        <span class="neuron-plus">＋</span>
+                        <span class="neuron-chip chip-b">b=0.1</span>
+                        <span class="neuron-arrow">→</span>
+                        <span class="neuron-chip chip-sum">z=1.8</span>
+                        <span class="neuron-arrow">→</span>
+                        <span class="neuron-chip chip-act">Sigmoid</span>
+                        <span class="neuron-arrow">→</span>
+                        <span class="neuron-chip chip-out">a=0.86</span>
+                    </div>
+                    <p class="interactive-desc">求和结果 z=1.8 经 Sigmoid 压缩到 (0,1) 区间输出 0.86。真实网络中有成千上万个这样的神经元并行协作。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 激活函数 -->
+        <section id="activation">
+            <h2>⚡ 激活函数：神经网络的"非线性开关"</h2>
+            <div class="card">
+                <p>如果只有加权求和，无论叠多少层，整个网络仍等价于一条直线。<strong>激活函数引入非线性</strong>，让网络能拟合任意复杂的曲线与模式。</p>
+                <ul class="feature-list">
+                    <li><strong>Sigmoid：</strong>输出压缩到 (0,1)，适合二分类输出层；但深层易梯度消失，隐藏层已很少用</li>
+                    <li><strong>Tanh：</strong>输出 (−1,1)，零中心化比 Sigmoid 略好，同样有梯度消失问题</li>
+                    <li><strong>ReLU：</strong>负数归零、正数不变。计算极快、正区间不饱和，是 CNN 隐藏层的默认选择</li>
+                    <li><strong>GELU / SiLU：</strong>平滑版 ReLU，Transformer / 大模型的主流选择（本平台文本模型使用 GELU）</li>
+                    <li><strong>Softmax：</strong>把一组分数归一化为"和为 1 的概率分布"，专用于多分类输出层</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 常见激活函数曲线对比</h3>
+                    <canvas id="actCanvas" width="700" height="320"></canvas>
+                    <div class="act-legend">
+                        <span class="legend-item"><i style="background:#ef4444;"></i>Sigmoid</span>
+                        <span class="legend-item"><i style="background:#f59e0b;"></i>Tanh</span>
+                        <span class="legend-item"><i style="background:#22c55e;"></i>ReLU</span>
+                        <span class="legend-item"><i style="background:#818cf8;"></i>GELU</span>
+                    </div>
+                    <p class="tip-text">💡 观察要点：ReLU 在 x&lt;0 处梯度为 0（可能出现"死神经元"）；GELU 全程平滑，大模型更偏爱它。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- CNN 卷积网络 -->
+        <section id="cnn">
+            <h2>🖼️ CNN 卷积网络：让机器"看懂"图片</h2>
+            <div class="card">
+                <p>卷积神经网络（CNN）是图像领域的核心架构，本平台的图像分类模型 SimpleResNet 就基于它。</p>
+                <ul class="feature-list">
+                    <li><strong>卷积核（Kernel）：</strong>一个小窗口（如 3×3）在图上滑动扫描，每个位置做点积——本质是在检测局部模式</li>
+                    <li><strong>特征图（Feature Map）：</strong>一个卷积核扫完整张图的响应结果；不同卷积核检测不同模式（边缘/角点/纹理）</li>
+                    <li><strong>池化（Pooling）：</strong>把 2×2 区域压成 1 个值（取最大/平均），缩小尺寸、保留显著特征、增强平移鲁棒性</li>
+                    <li><strong>层级抽象：</strong>浅层看边缘 → 中层看纹理部件 → 深层看整体概念，这是 CNN 强大的根本原因</li>
+                    <li><strong>参数共享：</strong>同一个卷积核在整张图上复用，参数量远小于全连接层，这是它能处理大图的关键</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 卷积是怎么扫描的？</h3>
+                    <div class="conv-demo">
+                        <div class="conv-block">
+                            <div class="conv-caption">输入特征图（高亮 = 感受野）</div>
+                            <div class="conv-grid" id="convGrid"></div>
+                        </div>
+                        <div class="conv-arrow">➜<span>3×3 卷积核<br>逐格滑动</span></div>
+                        <div class="conv-block">
+                            <div class="conv-caption">输出特征图</div>
+                            <div class="conv-grid conv-out" id="convOut"></div>
+                        </div>
+                    </div>
+                    <p class="interactive-desc">每个输出格子只由输入的 3×3 局部区域计算得到——这就是「局部连接」。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 数据集与过拟合 -->
+        <section id="data">
+            <h2>📊 数据集划分与过拟合</h2>
+            <div class="card">
+                <p>数据是模型的"教材"。规范的实验要求把数据分成互不相交的部分：</p>
+                <ul class="feature-list">
+                    <li><strong>训练集：</strong>模型学习规律的教材（通常占 70–80%）</li>
+                    <li><strong>测试集：</strong>期末考试——模型<strong>从未见过</strong>的数据，衡量真实能力。拿测试集训练等于考试作弊</li>
+                    <li><strong>过拟合（Overfitting）：</strong>把教材背得滚瓜烂熟、一考新题就崩——训练损失很低但测试表现差</li>
+                    <li><strong>欠拟合（Underfitting）：</strong>教材都没学会，训练和测试都差</li>
+                    <li><strong>常见对策：</strong>更多数据、数据增强（翻转/裁剪/加噪）、Dropout、正则化、早停（Early Stopping）</li>
+                </ul>
+                <p class="tip-text">💡 本平台训练会整体使用你上传的数据集；评估模型请在「模型测试」页使用<strong>独立</strong>上传的测试数据，才能反映真实水平。</p>
+            </div>
+        </section>
+
+        <!-- 超参数与优化器 -->
+        <section id="hyper">
+            <h2>🎛️ 超参数与优化器：训练前的关键决策</h2>
+            <div class="card">
+                <p><strong>参数</strong>（权重）由训练自动学得；<strong>超参数</strong>是训练开始前人工设定的配置，直接决定训练成败：</p>
+                <ul class="feature-list">
+                    <li><strong>学习率（Learning Rate）：</strong>每步参数更新的幅度。太大震荡发散，太小收敛缓慢——最重要的超参数</li>
+                    <li><strong>批大小（Batch Size）：</strong>每次更新用多少样本。大批稳定但吃显存，小批噪声大但有轻微正则效果</li>
+                    <li><strong>轮数（Epochs）：</strong>完整过几遍训练集。过多易过拟合，建议配合早停</li>
+                    <li><strong>优化器：</strong>决定"往哪走、走多快"。SGD 是基础款；<strong>AdamW</strong>（本平台默认）能自适应调整各参数步长并正确执行权重衰减，是大模型时代的主流选择</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 学习率速查（可回到上方梯度演示实测）</h3>
+                    <table class="hyper-table">
+                        <thead><tr><th>学习率</th><th>典型现象</th><th>下山类比</th></tr></thead>
+                        <tbody>
+                            <tr><td>0.001 ~ 0.01</td><td>稳定但收敛慢</td><td>小碎步，稳当却累</td></tr>
+                            <tr><td>0.01 ~ 0.1</td><td>多数场景的最佳区间</td><td>正常步伐</td></tr>
+                            <tr><td>&gt; 0.5</td><td>来回震荡甚至发散</td><td>一步跨过了谷底</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 评价指标 -->
+        <section id="metrics">
+            <h2>📏 评价指标：如何量化模型好坏</h2>
+            <div class="card">
+                <p>不同任务用不同的"打分尺"，只看一个指标可能得出错误结论：</p>
+                <ul class="feature-list">
+                    <li><strong>准确率（Accuracy）：</strong>预测对的比例。直观但怕类别失衡——99% 都是正常样本时，"全猜正常"也能拿 99%</li>
+                    <li><strong>精确率（Precision）：</strong>模型说"是"里面真正对的比例——衡量<strong>误报</strong>多不多（垃圾邮件误拦正常邮件 = 精确率低）</li>
+                    <li><strong>召回率（Recall）：</strong>真实"是"里面被找出来的比例——衡量<strong>漏报</strong>多不多（癌症筛查漏诊 = 召回率低，代价更高）</li>
+                    <li><strong>F1 分数：</strong>精确率与召回率的调和平均，两者需要平衡时看它</li>
+                    <li><strong>困惑度（PPL）：</strong>文本生成任务专用（见上文「损失与困惑度」），越低说明语言建模越好</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 类别失衡实验：准确率会骗人</h3>
+                    <p class="interactive-desc">假设 1000 个样本中只有 10 个是异常（1%）。调整"全猜正常"策略下的指标：</p>
+                    <div class="metric-demo">
+                        <div class="metric-card"><span>策略：全部猜「正常」</span><strong>准确率 99.0%</strong><em>但召回率 0% —— 一个异常都没抓到！</em></div>
+                        <div class="metric-card"><span>策略：完美分类器</span><strong>准确率 100%</strong><em>精确率 / 召回率 / F1 全部 100%，这才是好模型</em></div>
+                    </div>
+                    <p class="tip-text">💡 结论：类别失衡时必须结合 Precision / Recall / F1 综合判断。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 采样与文本生成 -->
+        <section id="sampling">
+            <h2>🎲 采样策略：大模型怎么"写出"下一个字</h2>
+            <div class="card">
+                <p>语言模型每步输出的是<strong>词表上的概率分布</strong>。从分布里挑下一个词的方法，决定了生成文本的风格：</p>
+                <ul class="feature-list">
+                    <li><strong>贪心搜索（Greedy）：</strong>永远选概率最高的词——稳定但呆板，容易重复</li>
+                    <li><strong>温度采样（Temperature）：</strong>先按温度 T 缩放 logits 再采样。T→0 接近贪心；T&gt;1 更随机更有创意；T 太高会语无伦次</li>
+                    <li><strong>Top-K：</strong>只在概率最高的 K 个候选里采样，截断长尾降低胡言乱语风险</li>
+                    <li><strong>Top-P（核采样）：</strong>动态版 Top-K——按概率从高到低累加，取累计恰好达到 P 的候选集，候选数量随分布自适应</li>
+                </ul>
+                <div class="interactive-area">
+                    <h3 class="interactive-title">🔍 温度如何重塑概率分布</h3>
+                    <p class="interactive-desc">拖动温度滑块，观察同一句话下一个字的概率变化（原始 logits：天 3.0 · 很 2.5 · 气 2.0 · 香 1.0）：</p>
+                    <div class="temp-controls">
+                        <label>温度 T：<span id="tempValue">0.8</span></label>
+                        <input type="range" id="tempSlider" min="0.1" max="2" step="0.1" value="0.8">
+                    </div>
+                    <div class="prob-bars" id="probBars"></div>
+                    <p class="tip-text">💡 本平台「模型测试」页的生成模板同样提供 TEMPERATURE 参数，可实测对比。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 术语速查表 -->
+        <section id="glossary">
+            <h2>📖 核心术语速查表</h2>
+            <div class="card">
+                <table class="hyper-table">
+                    <thead><tr><th>术语</th><th>一句话解释</th></tr></thead>
+                    <tbody>
+                        <tr><td>Token</td><td>模型处理文本的最小单位（见第一节）</td></tr>
+                        <tr><td>Embedding</td><td>Token 映射成的语义向量</td></tr>
+                        <tr><td>参数（Parameter）</td><td>网络里的权重和偏置，训练中被更新</td></tr>
+                        <tr><td>超参数（Hyperparameter）</td><td>训练前人工设定的配置（学习率等）</td></tr>
+                        <tr><td>前向传播</td><td>输入逐层计算得到输出的过程</td></tr>
+                        <tr><td>反向传播</td><td>沿梯度反方向逐层计算误差、更新权重的过程</td></tr>
+                        <tr><td>Batch / Epoch</td><td>一次更新的样本组 / 完整过一遍训练集</td></tr>
+                        <tr><td>Checkpoint</td><td>训练中途保存的模型快照，用于断点续训</td></tr>
+                        <tr><td>Safetensors</td><td>本平台新模型格式：只存权重的安全序列化格式（替代 pickle 的 .pth）</td></tr>
+                        <tr><td>MoE</td><td>Mixture of Experts：多个专家网络 + 门控路由，按需激活部分专家</td></tr>
+                        <tr><td>MLA</td><td>Multi-head Latent Attention：低秩压缩 KV 缓存的注意力变体</td></tr>
+                        <tr><td>PPL（困惑度）</td><td>e^Loss，衡量语言模型对下文的不确定程度</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
     </main>
 
     <footer>
