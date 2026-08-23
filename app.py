@@ -24,7 +24,6 @@ try:
     import shutil
     import zipfile
     import tempfile
-    from PIL import Image as PILImage
 
     # --------------------- 阶段2：加载全局配置（15→30%） ---------------------
     print("  [2/7] 加载全局配置...")

@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import warnings
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
-from PIL import Image as PILImage
+import cv2
+import numpy as np
 from os import walk, path as os_path
 from os.path import basename, dirname, join as path_join, exists as path_exists
 from random import randint, seed as random_seed
@@ -73,10 +74,10 @@ class ImageDataset(Dataset):
         self.num_classes = max(len(self.classes), 1)
         print(f"[ImageDataset] 类别: {self.classes}，共 {self.num_classes} 类")
 
-        # ImageNet标准图像预处理
+        # ImageNet标准图像预处理（ToTensor 在前：兼容 OpenCV ndarray 输入）
         self.transform = Compose([
-            Resize((image_size, image_size)),
             ToTensor(),
+            Resize((image_size, image_size)),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         # 缓存统计
@@ -101,10 +102,14 @@ class ImageDataset(Dataset):
         return max(len(self.image_files), 1)
 
     def _load_image(self, img_path):
-        """加载单张图像，异常时返回全0张量"""
+        """加载单张图像（OpenCV 解码，兼容中文路径），异常时返回全0张量"""
         try:
-            with PILImage.open(img_path) as img:
-                return self.transform(img.convert('RGB'))
+            buf = np.fromfile(img_path, dtype=np.uint8)
+            img = cv2.imdecode(buf, cv2.IMREAD_COLOR)  # BGR
+            if img is None:
+                return torch.zeros(3, self.image_size, self.image_size)
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            return self.transform(rgb)
         except:
             return torch.zeros(3, self.image_size, self.image_size)
 
