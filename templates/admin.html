@@ -276,6 +276,22 @@
                     <div id="cleanupStats" style="font-size:12px;color:var(--text-muted);">占用统计加载中...</div>
                 </div>
             </div>
+            <!-- 资源占用上限 -->
+            <div class="card" style="margin:0 0 16px;">
+                <div class="card-header"><span class="icon">🎚️</span><h3>资源占用上限（默认系统一半）</h3></div>
+                <div style="padding:0 4px;">
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0;">
+                        <span style="font-size:13px;color:var(--text-secondary);">CPU 线程上限（0=不限）</span>
+                        <input type="number" id="rlCpuInput" min="0" max="256"
+                               style="width:80px;padding:6px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;text-align:center;outline:none;">
+                        <span style="font-size:13px;color:var(--text-secondary);">内存上限 MB（0=不限）</span>
+                        <input type="number" id="rlMemInput" min="0"
+                               style="width:110px;padding:6px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;text-align:center;outline:none;">
+                        <button class="btn-sm btn-primary-sm" onclick="saveResourceLimits()">保存</button>
+                    </div>
+                    <div id="resourceLimitsInfo" style="font-size:12px;color:var(--text-muted);">资源信息加载中...</div>
+                </div>
+            </div>
             <div class="table-wrap"><table>
                 <thead>
                     <tr>
@@ -612,6 +628,44 @@
         loadLogs();
         loadDeviceStatus();
         loadCleanupStatus();
+        loadResourceLimits();
+
+        // 资源占用上限
+        async function loadResourceLimits() {
+            try {
+                const res = await fetch('/admin/api/resource_limits');
+                const data = await res.json();
+                if (data.status !== 'success') return;
+                const L = data.limits;
+                document.getElementById('rlCpuInput').value = L.max_cpu_threads;
+                document.getElementById('rlMemInput').value = L.max_memory_mb;
+                const u = L.usage || {};
+                const src = L.is_default ? '默认(系统一半)' : '自定义';
+                document.getElementById('resourceLimitsInfo').textContent =
+                    `当前配置: ${src} | 系统: ${L.system_cpu_threads} 线程 / ${L.system_memory_mb ?? '?'} MB 内存` +
+                    ` | 本进程占用: ${u.memory_mb ?? '?'} MB / CPU ${u.cpu_percent ?? '-'}%` +
+                    ` | 超限后新训练将被拒绝`;
+            } catch (e) { console.error('resource limits failed:', e); }
+        }
+
+        async function saveResourceLimits() {
+            const cpu = parseInt(document.getElementById('rlCpuInput').value || '0', 10);
+            const mem = parseInt(document.getElementById('rlMemInput').value || '0', 10);
+            try {
+                const res = await fetch('/admin/api/resource_limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ max_cpu_threads: cpu, max_memory_mb: mem })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`资源上限已保存：CPU ${cpu} 线程 / 内存 ${mem} MB（0=不限）`);
+                    loadResourceLimits();
+                } else {
+                    alert(data.message || '保存失败');
+                }
+            } catch (e) { alert('保存请求失败'); }
+        }
 
         // 存储清理
         function fmtSize(bytes) {

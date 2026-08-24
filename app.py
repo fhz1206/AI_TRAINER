@@ -101,6 +101,11 @@ init_app_logger(app)
 from cleanup import start_auto_clean_scheduler
 start_auto_clean_scheduler()
 
+# 资源占用上限：默认取系统一半资源，约束计算线程并持续监控内存
+from resource_limits import apply_thread_limits, start_limit_monitor
+apply_thread_limits()
+start_limit_monitor()
+
 # ==================== 服务启动 ====================
 if __name__ == '__main__':
     try:

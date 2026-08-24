@@ -310,6 +310,33 @@ def api_set_user_bandwidth(user_id):
 
 
 # ==================== 存储清理 ====================
+# ==================== 资源占用上限 ====================
+@admin_bp.route('/api/resource_limits', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def api_resource_limits():
+    """
+    GET  ：查看资源上限（含系统总量、默认值来源与当前占用）
+    POST ：设置上限；传 0 表示不限制。未配置过时默认为系统资源的一半
+    """
+    from resource_limits import get_limits, set_limits, current_usage
+    if request.method == 'GET':
+        data = get_limits()
+        data['usage'] = current_usage()
+        return jsonify({'status': 'success', 'limits': data})
+
+    data = request.json or {}
+    try:
+        cfg = set_limits(max_cpu_threads=data.get('max_cpu_threads'),
+                         max_memory_mb=data.get('max_memory_mb'))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': '参数格式错误'}), 400
+    add_activity_log(session['user_id'], 'admin',
+                     f"设置资源上限：CPU {cfg['max_cpu_threads']} 线程 / "
+                     f"内存 {cfg['max_memory_mb']} MB（0=不限）")
+    return jsonify({'status': 'success', 'limits': cfg})
+
+
 @admin_bp.route('/api/cleanup/status')
 @login_required
 @admin_required

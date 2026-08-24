@@ -17,14 +17,22 @@ def update_task(tasks, task_id, **kwargs):
 
 
 def _dataloader_workers():
-    """DataLoader 工作进程数：半数CPU、上限4；可用 AITPP_DATALOADER_WORKERS 覆盖（0=单进程）"""
+    """
+    DataLoader 工作进程数：受资源上限约束（默认系统一半），上限4；
+    可用 AITPP_DATALOADER_WORKERS 覆盖（0=单进程）
+    """
     env = os.environ.get('AITPP_DATALOADER_WORKERS')
     if env is not None:
         try:
             return max(0, int(env))
         except ValueError:
             pass
-    return max(1, min(4, (os.cpu_count() or 2) // 2))
+    try:
+        from resource_limits import effective_cpu_threads
+        budget = effective_cpu_threads()
+    except Exception:
+        budget = os.cpu_count() or 2
+    return max(1, min(4, budget))
 
 
 def _multiproc_loader_ok():

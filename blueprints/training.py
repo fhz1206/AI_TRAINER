@@ -340,6 +340,13 @@ def api_start_training():
     
     if not data_path:
         return jsonify({'status': 'error', 'message': '请先上传训练数据'}), 400
+
+    # 资源占用上限准入：内存达到上限时拒绝新任务（默认上限=系统一半资源）
+    from resource_limits import admission_check
+    allowed, deny_reason = admission_check()
+    if not allowed:
+        add_activity_log(user_id, 'train', f'训练被资源上限拒绝: {deny_reason}')
+        return jsonify({'status': 'error', 'message': deny_reason}), 429
     
     model_params = {
         'image_size': data.get('image_size', 224),
