@@ -220,4 +220,7 @@ python app.py
 
 ## 许可证
 
-BSD 3-Clause
+本项目基于 **BSD 3-Clause** 许可证开源（见根目录 [`LICENSE`](LICENSE)）。
+
+平台训练产出的所有标准模型导出包（`model.safetensors` + `config.json` + 分词器文件）
+均内嵌同一份 BSD-3-Clause `LICENSE` 文件，随模型一起分发。
