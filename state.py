@@ -10,6 +10,7 @@ _max_concurrent = 5
 _concurrent_lock = Lock()
 _queue = []  # 队列中的任务 [(task_id, user_id, params, enqueue_time), ...]
 _active_tasks = set()  # 当前正在训练的任务ID集合
+_pending_starters = {}  # 排队任务的线程启动器：被调度到时由状态层拉起
 
 
 def get_max_concurrent():
@@ -62,6 +63,13 @@ def _try_start_next():
             'params': params,
             'enqueue_time': enqueue_time,
         }
+        # 拉起该任务在蓝图层注册的等待线程（若已注册）
+        starter = _pending_starters.pop(task_id, None)
+        if starter:
+            try:
+                starter()
+            except Exception:
+                pass
         return True  # 通知调用方可以启动
     return False
 
@@ -115,6 +123,25 @@ def get_queue_status():
         }
 
 
+def register_pending_starter(task_id, starter):
+    """
+    登记"已入队但尚未启动"的任务线程启动器。
+    返回 False 表示任务已被直接调度（调用方应立即自行启动线程）；
+    返回 True 表示已登记——任务被调度到时会由 _try_start_next 自动拉起。
+    """
+    with _concurrent_lock:
+        if task_id in _active_tasks:
+            return False
+        _pending_starters[task_id] = starter
+        return True
+
+
+def discard_pending_starter(task_id):
+    """注销启动器（取消任务等场景），避免残留引用"""
+    with _concurrent_lock:
+        _pending_starters.pop(task_id, None)
+
+
 def cancel_task(task_id):
     """取消队列中的任务（管理员用）"""
     global _queue, _active_tasks
@@ -123,6 +150,7 @@ def cancel_task(task_id):
         for i, item in enumerate(_queue):
             if item[0] == task_id:
                 _queue.pop(i)
+                _pending_starters.pop(task_id, None)  # 取消排队任务时同步清理启动器
                 if task_id in training_tasks:
                     training_tasks[task_id] = {
                         'status': 'cancelled',

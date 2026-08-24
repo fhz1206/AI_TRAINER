@@ -232,22 +232,34 @@ class TextDataset(Dataset):
     def _scan_with_progress(self, folder, out_texts, callback):
         count = 0
         start = time_now()
+
+        def _read_one(p):
+            try:
+                raw = np.fromfile(p, dtype=np.uint8)
+                text = raw.tobytes().decode('utf-8', errors='ignore')
+                if text.strip():
+                    out_texts.append(text)
+                    return 1
+            except Exception:
+                pass
+            return 0
+
+        # 兼容直接传入单个 txt 文件的情况（上传单文件时 data_path 指向文件本身）
+        if os_path.isfile(folder):
+            count += _read_one(folder)
+            if callback:
+                callback(count, count, f'扫描完成，共 {count} 个文件 ({time_now()-start:.0f}s)')
+            return
+
         for root, dirs, files in walk(folder):
             dirs.sort()
             for f in sorted(files):
                 if f.lower().endswith('.txt'):
                     p = os_path.join(root, f)
-                    try:
-                        raw = np.fromfile(p, dtype=np.uint8)
-                        text = raw.tobytes().decode('utf-8', errors='ignore')
-                        if text.strip():
-                            out_texts.append(text)
-                            count += 1
-                            if callback and count % self.scan_interval == 0:
-                                callback(count, '?',
-                                         f'扫描中... 已发现 {count} 个文件 ({time_now()-start:.0f}s)')
-                    except Exception:
-                        pass
+                    count += _read_one(p)
+                    if callback and count % self.scan_interval == 0:
+                        callback(count, '?',
+                                 f'扫描中... 已发现 {count} 个文件 ({time_now()-start:.0f}s)')
         if callback:
             callback(count, count, f'扫描完成，共 {count} 个文件 ({time_now()-start:.0f}s)')
 

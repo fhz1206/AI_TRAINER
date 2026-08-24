@@ -408,8 +408,13 @@ def api_start_training():
 
     if can_start_task(task_id):
         thread.start()
-        status_msg = f'{train_type} 训练已启动 (task_id: {task_id})'
+        status_msg = f'{model_key} 训练已启动 (task_id: {task_id})'
     else:
+        # 排队中：登记线程启动器，任务被队列调度到时由状态层自动拉起
+        # （修复：此前排队任务的线程从未被启动，导致并发占满后任务永远卡在 queued）
+        from state import register_pending_starter
+        if not register_pending_starter(task_id, thread.start):
+            thread.start()  # 竞态兜底：登记瞬间已被调度则直接启动
         status_msg = f'已加入队列，等待中 (位置: #{position})'
 
     add_activity_log(user_id, 'train', f'启动 {train_type} 训练 (task_id: {task_id})',
