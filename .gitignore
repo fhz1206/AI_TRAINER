@@ -21,10 +21,12 @@ __pycache__/
 logs/
 *.log
 *.db
-*uploads/
-*models/
-*test_data/
-*output/
+uploads/
+test_data/
+output/
+# models/ 双重身份：既是模型代码包（跟踪 *.py），也是训练产物目录（忽略其余）
+/models/*
+!/models/*.py
 *.atomcode/
 .gitignore
 instance/

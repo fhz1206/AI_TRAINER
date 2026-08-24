@@ -13,7 +13,10 @@ import os
 import torch
 from safetensors.torch import load_file, save_file
 
-from model import SimpleResNet, TextTransformerModel
+from models.vision import SimpleResNet, ViTModel
+from models.text import TextTransformerModel
+from models.diffusion import DiffusionModel, DiffusionEditModel
+from models.multimodal import MultiModalSingleStream
 
 _META_SUFFIX = '.safetensors.json'
 
@@ -36,7 +39,10 @@ def _build_metadata(model):
 def save_model(model, model_path):
     """按扩展名保存：.safetensors（推荐，自动写旁车元数据）/ .pth（旧行为）"""
     if model_path.endswith('.safetensors'):
-        state = {k: v.contiguous() for k, v in model.state_dict().items()}
+        # clone 解除权重共享（如 lm_head 与 token_emb 绑定），safetensors 不接受共享内存张量；
+        # 加载侧重建结构时会重新执行绑定，两份相同数据写回同一存储，语义不变
+        state = {k: v.detach().contiguous().clone()
+                 for k, v in model.state_dict().items()}
         save_file(state, model_path)
         meta_path = model_path + '.json'
         with open(meta_path, 'w', encoding='utf-8') as f:
@@ -45,10 +51,33 @@ def save_model(model, model_path):
         torch.save(model, model_path)
 
 
+def _build_text_kwargs(mp_):
+    """文本生成模型的重建参数（新旧 safetensors 共用）"""
+    return dict(
+        vocab_size=mp_.get('vocab_size', 1000),
+        d_model=mp_.get('d_model', 256),
+        n_layers=mp_.get('n_layers', 4),
+        n_heads=mp_.get('n_heads', 8),
+        d_ff=mp_.get('d_ff', 1024),
+        max_seq_len=mp_.get('max_seq_len', 128),
+        dropout=mp_.get('dropout', 0.1),
+        pad_token_id=mp_.get('pad_token_id', 0),
+        use_moe=mp_.get('use_moe', False),
+        use_mla=mp_.get('use_mla', False),
+        moe_experts=mp_.get('moe_experts', 4),
+        moe_top_k=mp_.get('moe_top_k', 2),
+        mla_dim=mp_.get('mla_dim', 256),
+        aux_loss_weight=min(mp_.get('aux_loss_weight', 0.02), 0.05),
+        # 新字段：旧元数据缺失时默认 flash（与旧版行为最接近的融合实现）
+        attention_type=mp_.get('attention_type', 'flash'),
+    )
+
+
 def _rebuild_architecture(meta):
-    """根据元数据重建网络结构"""
+    """根据元数据重建网络结构（覆盖全部注册的模型类型）"""
     mp_ = meta.get('model_params', {})
     mtype = meta.get('model_type', '')
+
     if mtype == 'image_cnn':
         return SimpleResNet(
             image_size=mp_.get('image_size', 224),
@@ -57,22 +86,52 @@ def _rebuild_architecture(meta):
             base_channels=mp_.get('base_channels', 64),
             dropout=mp_.get('dropout', 0.1),
         )
+    if mtype == 'image_vit':
+        return ViTModel(
+            image_size=mp_.get('image_size', 224),
+            patch_size=mp_.get('patch_size', 32),
+            in_channels=mp_.get('in_channels', 3),
+            num_classes=mp_.get('num_classes', 10),
+            d_model=mp_.get('d_model', 192),
+            n_layers=mp_.get('n_layers', 6),
+            n_heads=mp_.get('n_heads', 4),
+            d_ff=mp_.get('d_ff', 384),
+            dropout=mp_.get('dropout', 0.1),
+            attention_type=mp_.get('attention_type', 'flash'),
+        )
     if mtype == 'text_generation':
-        return TextTransformerModel(
+        return TextTransformerModel(**_build_text_kwargs(mp_))
+    if mtype == 'image_diffusion':
+        return DiffusionModel(
+            image_size=mp_.get('image_size', 32),
+            base_channels=mp_.get('base_channels', 32),
+            num_timesteps=mp_.get('num_timesteps', 300),
+            attn_heads=mp_.get('attn_heads', 4),
+        )
+    if mtype == 'image_edit_diffusion':
+        return DiffusionEditModel(
+            image_size=mp_.get('image_size', 32),
+            base_channels=mp_.get('base_channels', 32),
+            num_timesteps=mp_.get('num_timesteps', 300),
+            attn_heads=mp_.get('attn_heads', 4),
+        )
+    if mtype == 'multimodal_stream':
+        return MultiModalSingleStream(
             vocab_size=mp_.get('vocab_size', 1000),
-            d_model=mp_.get('d_model', 256),
+            image_size=mp_.get('image_size', 32),
+            patch_size=mp_.get('patch_size', 8),
+            in_channels=mp_.get('in_channels', 3),
+            d_model=mp_.get('d_model', 192),
             n_layers=mp_.get('n_layers', 4),
-            n_heads=mp_.get('n_heads', 8),
-            d_ff=mp_.get('d_ff', 1024),
-            max_seq_len=mp_.get('max_seq_len', 128),
+            n_heads=mp_.get('n_heads', 4),
+            d_ff=mp_.get('d_ff', 384),
+            max_seq_len=mp_.get('max_seq_len', 64),
             dropout=mp_.get('dropout', 0.1),
             pad_token_id=mp_.get('pad_token_id', 0),
             use_moe=mp_.get('use_moe', False),
-            use_mla=mp_.get('use_mla', False),
             moe_experts=mp_.get('moe_experts', 4),
             moe_top_k=mp_.get('moe_top_k', 2),
-            mla_dim=mp_.get('mla_dim', 256),
-            aux_loss_weight=min(mp_.get('aux_loss_weight', 0.02), 0.05),
+            attention_type=mp_.get('attention_type', 'flash'),
         )
     raise ValueError(f'未知模型类型: {mtype or "(缺失)"}，无法重建网络')
 

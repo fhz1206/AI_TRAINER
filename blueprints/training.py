@@ -10,7 +10,7 @@ from database import save_file_record, get_user_files, get_db
 from database import add_activity_log
 from state import training_tasks
 from state import enqueue_task, can_start_task, mark_task_done, get_queue_status
-from trainer import train_image_model, train_text_model
+from trainers import TRAIN_FUNCTIONS, TRAIN_TYPES
 from blueprints.utils import login_required
 
 training_bp = Blueprint('training', __name__, url_prefix='/api')
@@ -127,7 +127,8 @@ def api_upload():
         for root, dirs, files in os.walk(filepath):
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
-                if train_type == 'image' and ext in IMAGE_EXTENSIONS:
+                # 多模态图文配对数据与图片数据集同样按图片文件计数
+                if train_type in ('image', 'multimodal') and ext in IMAGE_EXTENSIONS:
                     file_count += 1
                 elif train_type == 'text' and ext == '.txt':
                     file_count += 1
@@ -354,6 +355,13 @@ def api_start_training():
         'use_moe': data.get('use_moe', False),
         'use_mla': data.get('use_mla', False),
     }
+    # 新架构积木参数（按需透传，未传时训练器使用默认值）
+    if data.get('attention_type'):
+        model_params['attention_type'] = str(data['attention_type']).lower()
+    if data.get('patch_size'):
+        model_params['patch_size'] = int(data['patch_size'])
+    if data.get('num_timesteps'):
+        model_params['num_timesteps'] = int(data['num_timesteps'])
     
     train_params = {
         'data_path': data_path,
@@ -362,14 +370,23 @@ def api_start_training():
         'batch_size': data.get('batch_size', 32),
     }
     
-    if train_type == 'image':
-        thread = __import__('threading').Thread(target=train_image_model, args=(
-            str(user_id), task_id, model_params, train_params, training_tasks
-        ))
-    else:
-        thread = __import__('threading').Thread(target=train_text_model, args=(
-            str(user_id), task_id, model_params, train_params, training_tasks
-        ))
+    # 解析具体架构：前端显式传 model_key；旧客户端按 train_type 回退默认架构
+    model_key = (data.get('model_key') or {
+        'llm': 'text_generation',
+        'text': 'text_generation',
+        'image': 'image_cnn',
+        'multimodal': 'multimodal_stream',
+    }.get(train_type))
+    if not model_key or model_key not in TRAIN_FUNCTIONS:
+        return jsonify({'status': 'error',
+                        'message': f'未知模型架构: {model_key}，可选: {sorted(TRAIN_FUNCTIONS)}'}), 400
+
+    def _run_training(tid):
+        TRAIN_FUNCTIONS[model_key](str(user_id), tid, model_params,
+                                   train_params, training_tasks)
+
+    import threading
+    thread = threading.Thread(target=_run_training, args=(task_id,))
     thread.daemon = True
 
     # 加入训练队列
@@ -398,6 +415,20 @@ def api_start_training():
         'queue_position': position,
         'is_running': can_start_task(task_id),
     })
+
+@training_bp.route('/architecture_options')
+@login_required
+def api_architecture_options():
+    """积木式装配选项：可选注意力类型与模型架构（前端动态渲染下拉框）"""
+    from architectures import available_attentions
+    from models import available_models
+    return jsonify({
+        'status': 'success',
+        'attentions': available_attentions(),
+        'models': available_models(),
+        'sections': TRAIN_TYPES,
+    })
+
 
 @training_bp.route('/task_status/<task_id>')
 @login_required

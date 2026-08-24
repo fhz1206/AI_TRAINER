@@ -33,11 +33,14 @@
 
         <!-- 训练类型切换 -->
         <div class="tabs-container" role="tablist">
-            <button class="tab-btn active" data-type="image" onclick="switchType('image')">
-                <span>🖼️</span> 图片训练
+            <button class="tab-btn active" data-type="llm" onclick="switchType('llm')">
+                <span>🧠</span> 大语言模型
             </button>
-            <button class="tab-btn" data-type="text" onclick="switchType('text')">
-                <span>📝</span> 文字训练
+            <button class="tab-btn" data-type="image" onclick="switchType('image')">
+                <span>🖼️</span> 图像模型
+            </button>
+            <button class="tab-btn" data-type="multimodal" onclick="switchType('multimodal')">
+                <span>🧩</span> 多模态模型
             </button>
         </div>
 
@@ -71,6 +74,24 @@
                     <li>✅ ZIP 顶层需包含<strong>多个文件夹</strong>，每个文件夹对应一个图片类别</li>
                     <li>✅ 每个文件夹内放置该类别的<strong>图片文件</strong>（JPG/PNG/BMP/GIF）</li>
                     <li>✅ 支持多级子文件夹，系统会自动递归查找所有图片</li>
+                </ul>
+            </div>
+
+            <!-- 多模态训练上传要求 -->
+            <div class="upload-tip" id="multimodalUploadTip" style="display: none;">
+                <strong>📋 多模态图文配对数据上传要求</strong>
+                <div class="code-block">
+                    <div class="code-header">🖼️ 图文配对结构示例</div>
+                    <pre><code>mm_data.zip
+├── cat1.jpg          <span class="code-comment"># 图片文件</span>
+├── cat1.txt          <span class="code-comment"># 同名 .txt = 图片描述</span>
+├── dog1.jpg
+└── dog1.txt</code></pre>
+                </div>
+                <ul>
+                    <li>✅ 支持 <code>.zip</code> 压缩包，内含图片与<strong>同名 .txt 描述</strong>成对放置</li>
+                    <li>✅ 缺少同名 .txt 的图片会使用占位描述「一张照片」</li>
+                    <li>✅ 建议描述为简短中文句子，模型学习「看图续写」</li>
                 </ul>
             </div>
 
@@ -135,34 +156,94 @@
             </div>
         </div>
 
-        <!-- 图片模型参数 (CNN) -->
-        <div class="card" id="imageParams">
+        <!-- 图像模型参数（CNN / ViT / 生成 / 编辑） -->
+        <div class="card hidden" id="imageParams">
             <div class="card-header">
                 <span class="icon">🖼️</span>
-                <h3>CNN 图片模型参数</h3>
+                <h3>图像模型参数</h3>
                 <span class="badge" style="background:var(--accent)">活跃</span>
             </div>
             <div class="param-grid-3">
                 <div class="form-group">
+                    <label for="image_arch">模型架构</label>
+                    <select id="image_arch">
+                        <option value="image_cnn">CNN 卷积分类</option>
+                        <option value="image_vit">ViT 视觉Transformer分类</option>
+                        <option value="image_diffusion">扩散模型 · 图像生成</option>
+                        <option value="image_edit_diffusion">扩散适配 · 图像编辑</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="image_size">图片尺寸</label>
                     <input type="number" id="image_size" value="224" min="32" max="512">
                 </div>
-                <div class="form-group">
+                <div class="form-group" data-cls-only>
                     <label for="num_classes">分类数量</label>
                     <input type="number" id="num_classes" value="10" min="2">
                 </div>
+            </div>
+
+            <!-- CNN 专属 -->
+            <div class="param-grid-3 hidden" id="cnnParams">
                 <div class="form-group">
                     <label for="base_channels">基础通道数</label>
                     <input type="number" id="base_channels" value="64" min="16" max="256">
                 </div>
             </div>
+
+            <!-- ViT 专属 -->
+            <div class="param-grid-3 hidden" id="vitParams">
+                <div class="form-group">
+                    <label for="patch_size">Patch 大小</label>
+                    <select id="patch_size">
+                        <option value="8">8×8</option>
+                        <option value="16">16×16</option>
+                        <option value="32">32×32</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="vit_d_model">d_model</label>
+                    <input type="number" id="vit_d_model" value="192" min="64" step="64">
+                </div>
+                <div class="form-group">
+                    <label for="vit_layers">层数</label>
+                    <input type="number" id="vit_layers" value="6" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="vit_heads">注意力头数</label>
+                    <input type="number" id="vit_heads" value="4" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="vit_ff">前馈维度</label>
+                    <input type="number" id="vit_ff" value="384" min="128" step="64">
+                </div>
+                <div class="form-group">
+                    <label for="vit_attn">注意力积木</label>
+                    <select id="vit_attn"></select>
+                </div>
+            </div>
+
+            <!-- 扩散专属 -->
+            <div class="param-grid-3 hidden" id="diffusionParams">
+                <div class="form-group">
+                    <label for="diff_base">UNet 基础通道数</label>
+                    <input type="number" id="diff_base" value="32" min="8" max="128">
+                </div>
+                <div class="form-group">
+                    <label for="diff_steps">扩散步数 T</label>
+                    <input type="number" id="diff_steps" value="300" min="20" max="1000">
+                </div>
+                <div class="form-group">
+                    <p class="tip-text" style="margin-top:18px;">💡 建议尺寸 32/64，CPU 可训；生成=从噪声造图，编辑=退化图恢复</p>
+                </div>
+            </div>
         </div>
 
-        <!-- 文字模型参数 (Transformer) -->
-        <div class="card hidden" id="textParams">
+        <!-- 大语言模型参数 (Transformer) -->
+        <div class="card" id="textParams">
             <div class="card-header">
-                <span class="icon">📝</span>
-                <h3>Transformer 文字模型参数</h3>
+                <span class="icon">🧠</span>
+                <h3>大语言模型参数（Decoder-only Transformer）</h3>
                 <span class="badge" style="background:var(--accent)">活跃</span>
             </div>
             <div class="param-grid-3">
@@ -195,16 +276,29 @@
                     <input type="number" id="dropout_text" value="0.1" min="0" max="0.5" step="0.05">
                 </div>
             </div>
+
+            <!-- 注意力积木选择 -->
+            <div class="param-grid-3">
+                <div class="form-group">
+                    <label for="llm_attn">🧱 注意力积木</label>
+                    <select id="llm_attn"></select>
+                </div>
+                <div class="form-group">
+                    <label>当前注意力说明</label>
+                    <p class="tip-text" style="margin:0;" id="llm_attn_desc">—</p>
+                </div>
+            </div>
+
             <div class="checkbox-group">
                 <label class="checkbox-card">
                     <input type="checkbox" id="use_moe">
                     <span class="check-visual">✓</span>
-                    <span class="label-text">🔀 启用 MoE</span>
+                    <span class="label-text">🔀 启用 MoE 专家混合</span>
                 </label>
                 <label class="checkbox-card">
                     <input type="checkbox" id="use_mla">
                     <span class="check-visual">✓</span>
-                    <span class="label-text">🎯 启用 MLA</span>
+                    <span class="label-text">🎯 启用 MLA 投影头</span>
                 </label>
             </div>
 
@@ -235,6 +329,60 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- 多模态模型参数 -->
+        <div class="card hidden" id="multimodalParams">
+            <div class="card-header">
+                <span class="icon">🧩</span>
+                <h3>多模态单流模型参数（图文 Decoder-only）</h3>
+                <span class="badge" style="background:var(--accent)">活跃</span>
+            </div>
+            <div class="param-grid-3">
+                <div class="form-group">
+                    <label for="mm_vocab_size">词汇表大小</label>
+                    <input type="number" id="mm_vocab_size" value="1000" min="100">
+                </div>
+                <div class="form-group">
+                    <label for="mm_image_size">图片尺寸</label>
+                    <select id="mm_image_size">
+                        <option value="32">32×32（推荐，CPU可训）</option>
+                        <option value="64">64×64</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mm_patch_size">Patch 大小</label>
+                    <select id="mm_patch_size">
+                        <option value="8">8×8</option>
+                        <option value="16">16×16</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="mm_d_model">d_model</label>
+                    <input type="number" id="mm_d_model" value="192" min="64" step="64">
+                </div>
+                <div class="form-group">
+                    <label for="mm_layers">层数</label>
+                    <input type="number" id="mm_layers" value="4" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="mm_heads">注意力头数</label>
+                    <input type="number" id="mm_heads" value="4" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="mm_ff">前馈维度</label>
+                    <input type="number" id="mm_ff" value="384" min="128" step="64">
+                </div>
+                <div class="form-group">
+                    <label for="mm_seq_len">文本最大长度</label>
+                    <input type="number" id="mm_seq_len" value="40" min="16" max="256">
+                </div>
+                <div class="form-group">
+                    <label for="mm_attn">🧱 注意力积木</label>
+                    <select id="mm_attn"></select>
+                </div>
+            </div>
+            <p class="tip-text">💡 单流架构：图像 patch 与文本 token 拼接进同一条因果注意力链，模型学会「看图续写描述」。</p>
         </div>
 
         <!-- 选择训练数据集 -->

@@ -9,51 +9,120 @@ let classPreviewData = null;
 let selectedTextFile = null;
 
 // ==================== 训练类型切换 ====================
+// ==================== 注意力积木 ====================
+const ATTENTION_INFO = {
+    flash:  { name: 'Flash Attention（默认）', desc: '内核融合实现，显存省、速度快；需要看注意力热力图时自动退回标准计算' },
+    full:   { name: 'Full Attention', desc: '经典缩放点积注意力，全程显式矩阵运算，可用于可视化注意力权重' },
+    linear: { name: 'Linear Attention', desc: '线性近似，复杂度 O(S)，超长序列友好；表达能力略降' },
+};
+
+async function initArchitectureOptions() {
+    // 注意力积木下拉框（LLM / ViT / 多模态三处共用同一选项集）
+    let names = ['flash', 'full', 'linear'];
+    try {
+        const res = await fetch('/api/architecture_options');
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.attentions) && data.attentions.length) {
+            names = data.attentions;
+        }
+    } catch (e) { /* 后端不可用时使用内置列表 */ }
+
+    for (const selectId of ['llm_attn', 'vit_attn', 'mm_attn']) {
+        const sel = document.getElementById(selectId);
+        if (!sel) continue;
+        sel.innerHTML = '';
+        for (const n of names) {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = (ATTENTION_INFO[n] || {}).name || n;
+            if (n === 'flash') opt.selected = true;
+            sel.appendChild(opt);
+        }
+    }
+    document.getElementById('llm_attn').addEventListener('change', () => updateAttentionDesc('llm'));
+    updateAttentionDesc('llm');
+}
+
+function updateAttentionDesc(scope) {
+    if (scope !== 'llm') return;
+    const sel = document.getElementById('llm_attn');
+    const desc = document.getElementById('llm_attn_desc');
+    if (!sel || !desc) return;
+    desc.textContent = (ATTENTION_INFO[sel.value] || {}).desc || '—';
+}
+
+// 图像架构切换：显示对应专属参数块
+function onImageArchChange() {
+    const arch = document.getElementById('image_arch').value;
+    const isCls = (arch === 'image_cnn' || arch === 'image_vit');
+    document.getElementById('cnnParams').classList.toggle('hidden', arch !== 'image_cnn');
+    document.getElementById('vitParams').classList.toggle('hidden', arch !== 'image_vit');
+    document.getElementById('diffusionParams').classList.toggle(
+        'hidden', !(arch === 'image_diffusion' || arch === 'image_edit_diffusion'));
+    // 分类数量仅分类任务可见
+    document.querySelectorAll('[data-cls-only]').forEach(el => {
+        el.style.display = isCls ? '' : 'none';
+    });
+    // 扩散任务推荐小图尺寸
+    const sizeInput = document.getElementById('image_size');
+    if (arch === 'image_diffusion' || arch === 'image_edit_diffusion') {
+        if (parseInt(sizeInput.value, 10) > 128) sizeInput.value = 64;
+    }
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const archSel = document.getElementById('image_arch');
+    if (archSel) archSel.addEventListener('change', onImageArchChange);
+});
+
+function _normalizeSection(t) {
+    // 兼容旧 localStorage 中的 'text'
+    return t === 'llm' ? 'llm' : t;
+}
+
 function switchType(type) {
     currentType = type;
-    
+
     // 切换标签样式
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === type);
     });
-    
-    // 切换参数面板
-    const imgPanel = document.getElementById('imageParams');
-    const txtPanel = document.getElementById('textParams');
+
+    // 参数面板显隐
+    const show = id => document.getElementById(id).classList.remove('hidden');
+    const hide = id => document.getElementById(id).classList.add('hidden');
+
+    // 上传区与说明
+    const tips = { llm: 'textUploadTip', image: 'imageUploadTip', multimodal: 'multimodalUploadTip' };
+    Object.values(tips).forEach(id => document.getElementById(id).style.display = 'none');
+    document.getElementById('imageUploadArea').style.display =
+        (type === 'image' || type === 'multimodal') ? 'block' : 'none';
+    document.getElementById('textUploadArea').style.display =
+        type === 'llm' ? 'block' : 'none';
+    document.getElementById(tips[type]).style.display = 'block';
+
+    // 模型参数卡
+    hide('imageParams'); hide('textParams'); hide('multimodalParams');
     const accMetric = document.getElementById('accuracyMetric');
-    
-    if (type === 'image') {
-        imgPanel.classList.remove('hidden');
-        txtPanel.classList.add('hidden');
-        accMetric.style.display = 'flex';
-        // 切换上传区
-        document.getElementById('imageUploadTip').style.display = 'block';
-        document.getElementById('textUploadTip').style.display = 'none';
-        document.getElementById('imageUploadArea').style.display = 'block';
-        document.getElementById('textUploadArea').style.display = 'none';
-        // 图片训练禁用MoE/MLA
-        document.getElementById('use_moe').disabled = true;
-        document.getElementById('use_mla').disabled = true;
-        document.getElementById('moeParams').classList.add('hidden');
-        document.getElementById('mlaParams').classList.add('hidden');
-    } else {
-        imgPanel.classList.add('hidden');
-        txtPanel.classList.remove('hidden');
+    if (type === 'llm') {
+        show('textParams');
         accMetric.style.display = 'none';
-        // 切换上传区
-        document.getElementById('imageUploadTip').style.display = 'none';
-        document.getElementById('textUploadTip').style.display = 'block';
-        document.getElementById('imageUploadArea').style.display = 'none';
-        document.getElementById('textUploadArea').style.display = 'block';
-        // 文本训练启用MoE/MLA，根据勾选状态显示参数
         document.getElementById('use_moe').disabled = false;
         document.getElementById('use_mla').disabled = false;
-        if (document.getElementById('use_moe').checked) {
-            document.getElementById('moeParams').classList.remove('hidden');
-        }
-        if (document.getElementById('use_mla').checked) {
-            document.getElementById('mlaParams').classList.remove('hidden');
-        }
+        if (document.getElementById('use_moe').checked) show('moeParams');
+        if (document.getElementById('use_mla').checked) show('mlaParams');
+    } else if (type === 'image') {
+        show('imageParams');
+        accMetric.style.display = 'flex';
+        document.getElementById('use_moe').disabled = true;
+        document.getElementById('use_mla').disabled = true;
+        hide('moeParams'); hide('mlaParams');
+        onImageArchChange();
+    } else {
+        show('multimodalParams');
+        accMetric.style.display = 'flex';
+        document.getElementById('use_moe').disabled = true;
+        document.getElementById('use_mla').disabled = true;
+        hide('moeParams'); hide('mlaParams');
     }
 }
 
@@ -163,7 +232,8 @@ async function confirmClassUpload() {
 
     const formData = new FormData();
     formData.append('file', selectedClassFile);
-    formData.append('train_type', 'image');
+    // 多模态分区复用图片上传区，但按 multimoal 类型入库（图文配对数据）
+    formData.append('train_type', currentType === 'multimodal' ? 'multimodal' : 'image');
 
     try {
         const res = await fetch('/api/upload', {
@@ -417,24 +487,18 @@ async function startTraining() {
     }
     
     // 收集参数
+    const section = currentType;   // llm | image | multimodal
     const params = {
-        train_type: currentType,
+        train_type: section,
         dataset_id: selectedDatasetId,
         learning_rate: parseFloat(document.getElementById('learning_rate').value),
         epochs: parseInt(document.getElementById('epochs').value),
         batch_size: parseInt(document.getElementById('batch_size').value),
     };
-    
-    if (currentType === 'image') {
-        params.image_size = parseInt(document.getElementById('image_size').value);
-        params.num_classes = parseInt(document.getElementById('num_classes').value);
-        params.base_channels = parseInt(document.getElementById('base_channels').value);
-        params.d_model = 512; params.n_layers = 6; params.n_heads = 8;
-        params.d_ff = 2048; params.dropout = 0.1;
-        params.use_moe = false;
-        params.use_mla = false;
-        params.vocab_size = 1000; params.max_seq_len = 128;
-    } else {
+
+    if (section === 'llm') {
+        // 大语言模型：Decoder-only Transformer + 积木式注意力 + MoE/MLA
+        params.model_key = 'text_generation';
         params.vocab_size = parseInt(document.getElementById('vocab_size').value);
         params.max_seq_len = parseInt(document.getElementById('max_seq_len').value);
         params.d_model = parseInt(document.getElementById('d_model_text').value);
@@ -442,9 +506,9 @@ async function startTraining() {
         params.n_heads = parseInt(document.getElementById('n_heads_text').value);
         params.d_ff = parseInt(document.getElementById('d_ff_text').value);
         params.dropout = parseFloat(document.getElementById('dropout_text').value);
+        params.attention_type = document.getElementById('llm_attn').value;
         params.use_moe = document.getElementById('use_moe').checked;
         params.use_mla = document.getElementById('use_mla').checked;
-        // 收集MoE/MLA专属参数
         if (params.use_moe) {
             params.moe_experts = parseInt(document.getElementById('moe_experts').value);
             params.moe_top_k = parseInt(document.getElementById('moe_top_k').value);
@@ -453,7 +517,42 @@ async function startTraining() {
             params.mla_heads = parseInt(document.getElementById('mla_heads').value);
             params.mla_dim = parseInt(document.getElementById('mla_dim').value);
         }
-        params.image_size = 224; params.num_classes = 10; params.base_channels = 64;
+        params.image_size = 224;
+    } else if (section === 'image') {
+        // 图像模型：CNN / ViT / 扩散生成 / 扩散编辑（积木式选择）
+        const arch = document.getElementById('image_arch').value;
+        params.model_key = arch;
+        params.image_size = parseInt(document.getElementById('image_size').value);
+        if (arch === 'image_cnn' || arch === 'image_vit') {
+            params.num_classes = parseInt(document.getElementById('num_classes').value);
+        }
+        if (arch === 'image_cnn') {
+            params.base_channels = parseInt(document.getElementById('base_channels').value);
+        }
+        if (arch === 'image_vit') {
+            params.patch_size = parseInt(document.getElementById('patch_size').value);
+            params.d_model = parseInt(document.getElementById('vit_d_model').value);
+            params.n_layers = parseInt(document.getElementById('vit_layers').value);
+            params.n_heads = parseInt(document.getElementById('vit_heads').value);
+            params.d_ff = parseInt(document.getElementById('vit_ff').value);
+            params.attention_type = document.getElementById('vit_attn').value;
+        }
+        if (arch === 'image_diffusion' || arch === 'image_edit_diffusion') {
+            params.base_channels = parseInt(document.getElementById('diff_base').value);
+            params.num_timesteps = parseInt(document.getElementById('diff_steps').value);
+        }
+    } else {
+        // 多模态单流：图文配对 + 积木式注意力
+        params.model_key = 'multimodal_stream';
+        params.vocab_size = parseInt(document.getElementById('mm_vocab_size').value);
+        params.image_size = parseInt(document.getElementById('mm_image_size').value);
+        params.patch_size = parseInt(document.getElementById('mm_patch_size').value);
+        params.d_model = parseInt(document.getElementById('mm_d_model').value);
+        params.n_layers = parseInt(document.getElementById('mm_layers').value);
+        params.n_heads = parseInt(document.getElementById('mm_heads').value);
+        params.d_ff = parseInt(document.getElementById('mm_ff').value);
+        params.max_seq_len = parseInt(document.getElementById('mm_seq_len').value);
+        params.attention_type = document.getElementById('mm_attn').value;
     }
     
     // 重置状态
@@ -674,10 +773,18 @@ async function handleLogout() {
 }
 
 // ==================== 页面初始化 ====================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // 兼容旧版 localStorage 中遗留的 'text' 类型名
+    if (currentType === 'text') {
+        currentType = 'llm';
+        localStorage.setItem('currentType', 'llm');
+    }
     // 恢复训练类型
     if (currentType) switchType(currentType);
-    
+
+    // 加载注意力/架构积木选项
+    await initArchitectureOptions();
+
     // 加载模型和数据集列表
     loadModels();
     loadDatasets();

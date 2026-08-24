@@ -10,7 +10,7 @@
 
 > 用户和管理员的使用说明请查看使用说明查找表
 
-> **生态联动**：AI_TRAINER <img src="AI_TRAINER-logo.png" width="18"/> × [CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer)
+> **生态联动**：AI_TRAINER <img src="AI_TRAINER-logo.png" width="18"/> × [CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer) <img src="CostCut-Infer-logo.png">
 ---
 # 使用说明查找表
 | 用户使用说明 | 管理员使用说明 |
@@ -60,14 +60,31 @@ Windows_ITPP/
 ├── app_logger.py           # 全局请求日志（轮转 + 内存友好）
 ├── config.py               # 全局配置
 ├── database.py             # SQLite3 数据库管理
-├── model.py                # 模型定义 + 数据集类
-├── trainer.py              # 训练器（CNN + Transformer）
+├── model.py                # 数据管线（Dataset/LRU缓存）+ 兼容门面
+├── model_io.py             # 模型存取统一入口（safetensors + 元数据旁车）
+├── trainer.py              # 兼容垫片（训练实现已迁移 trainers 包）
 ├── state.py                # 训练任务状态（内存）
+├── cleanup.py              # 存储清理机制
 ├── requirements.txt        # Python 依赖
+├── architectures/          # 🧱 模型积木库（可插拔）
+│   ├── attention.py        #   注意力注册表：full / flash(默认) / linear
+│   ├── blocks.py           #   TransformerBlock / 双向编码块(ViT)
+│   └── moe.py              #   MoE 专家混合层（修复版）
+├── models/                 # 模型实现包（按架构分文件存放）
+│   ├── vision.py           #   CNN(SimpleResNet) / ViT 图像分类
+│   ├── text.py             #   Decoder-only 文本生成（积木式注意力+MoE）
+│   ├── diffusion.py        #   扩散生成 DDPM / 扩散编辑适配
+│   ├── multimodal.py       #   多模态单流（图文 Decoder-only）
+│   └── legacy.py           #   旧版组件存档（仅供历史 .pth 反序列化）
+├── trainers/               # 训练器包（按训练类型分发）
+│   ├── image_cls.py        #   图像分类（CNN/ViT 统一入口）
+│   ├── text_gen.py         #   文本生成训练
+│   ├── diffusion.py        #   扩散生成/编辑训练
+│   └── multimodal.py       #   多模态图文配对训练
 ├── blueprints/
 │   ├── auth.py             # 认证 API
 │   ├── main.py             # 页面路由
-│   ├── training.py         # 训练 API
+│   ├── training.py         # 训练 API（含 /api/architecture_options 积木选项）
 │   ├── model.py            # 模型管理 API
 │   ├── test.py             # 测试 API
 │   ├── profile.py          # 账号主页 API
@@ -81,7 +98,7 @@ Windows_ITPP/
 │   └── tokenizer_bpe.json  # BPE 分词模型（精简版）
 ├── templates/
 │   ├── homepage.html       # 首页（公开）
-│   ├── index.html          # 训练面板
+│   ├── index.html          # 训练面板（LLM/图像/多模态三分区）
 │   ├── login.html          # 登录/注册
 │   ├── check.html          # 模型测试
 │   ├── ai.html             # AI 基础学习
@@ -91,13 +108,25 @@ Windows_ITPP/
 │   ├── DirectionsUser.md   # 用户使用说明
 │   ├── DirectionsAdmin.md  # 管理员使用说明
 │   └── EXTENSION_DEV.md    # 扩展开发指南（CodeMate 联动）
-├── tokenizer/
-│   └── tokenizer.json  # BPE 分词模型
-├── uploads/                # 训练数据
-├── models/                 # 模型文件 (.pth)
-├── test_data/              # 测试数据
-└── training_platform.db    # 数据库
+├── uploads/                # 训练数据（运行时生成，不入库）
+├── models/                 # 模型文件产物（运行时生成，不入库；代码包见上）
+├── test_data/              # 测试数据（运行时生成，不入库）
+└── training_platform.db    # SQLite 数据库（运行时生成，不入库）
 ```
+
+### 模型架构总览
+
+| 分区 | 架构 | 说明 |
+|------|------|------|
+| 大语言模型 | Transformer (Decoder-only) | 注意力积木可切换 full/flash(默认)/linear，可选 MoE、MLA |
+| 图像模型 | CNN | 经典卷积分类 |
+| 图像模型 | ViT | 视觉 Transformer 分类，注意力积木可切换 |
+| 图像模型 | Diffusion (DDPM) | 图像生成，噪声预测式扩散 |
+| 图像模型 | Diffusion Edit Adapter | 图像编辑，条件拼接 + 退化对自监督 |
+| 多模态 | Single-Stream Decoder | 图文 token 单流拼接，看图续写 |
+
+扩展新注意力或新模型：分别用 `@register_attention('名字')` / `@register_model('名字')`
+注册即可自动出现在前端积木选项中，无需改动训练器与页面代码。
 
 ---
 
