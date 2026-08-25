@@ -1,0 +1,170 @@
+# Transformer生成式文本模型测试模板（修复版，适配删除MoE后的模型）
+import torch
+import math
+import os
+from model import TextTransformerModel, TextDataset
+
+# -------------------------- 可修改参数（必须用英文引号""，不要用中文引号） --------------------------
+BATCH_SIZE = 8          # 生成批次大小
+MAX_NEW_TOKENS = 20     # 测试时先设小一点，确认有输出再调大
+TEMPERATURE = 1.0       # 测试时先设1.0，关闭随机性
+TOP_K = 0               # 测试时先关闭top_k过滤
+PROMPT = "今天天气真"   # 测试生成用的起始文本，可随意修改
+# -----------------------------------------------------------------
+
+# 1. 加载模型（自动注入，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
+print("正在加载模型...")
+try:
+    from model_io import load_model, load_vocab
+    model = load_model(model_path, map_location='cpu')
+    model.eval()
+    print(f"✅ 模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"模型配置: vocab_size={model.vocab_size}, max_seq_len={model.max_seq_len}, MoE={model.use_moe}, MLA={model.use_mla}")
+except Exception as e:
+    print(f"❌ 模型加载失败：{str(e)}")
+    print("请检查：1. model_path是否正确 2. 模型是否是用当前model.py训练的 3. 模型文件是否损坏")
+    exit()
+
+# 2. 加载训练时保存的词表（必须和训练时的TextDataset分词逻辑完全一致）
+#    训练时TextDataset会将词表保存为 {数据目录}_token2char.pth
+char2token = None
+token2char = None
+
+# 尝试从模型metadata中获取训练数据路径，进而找到词表文件
+vocab_loaded = False
+try:
+    if hasattr(model, '_metadata') and isinstance(model._metadata, dict):
+        train_params = model._metadata.get('train_params', {})
+        data_path = train_params.get('data_path', '')
+        if data_path:
+            loaded_vocab = load_vocab(data_path.rstrip('/'))
+            if loaded_vocab:
+                token2char = loaded_vocab
+                char2token = {char: idx for idx, char in token2char.items()}
+                vocab_loaded = True
+                print(f"✅ 词表加载成功（来自训练数据目录），词表大小: {len(token2char)}")
+except Exception as e:
+    print(f"⚠️ 从metadata加载词表失败: {e}")
+
+# 如果metadata方式失败，尝试从模型同目录的checkpoint中查找词表
+if not vocab_loaded:
+    try:
+        model_dir = os.path.dirname(model_path)
+        # 搜索模型目录下所有checkpoint子目录
+        for item in os.listdir(model_dir):
+            if item.startswith('checkpoints_'):
+                ckpt_dir = os.path.join(model_dir, item)
+                if os.path.isdir(ckpt_dir):
+                    # 在checkpoint目录中查找词表文件
+                    for root, dirs, files in os.walk(ckpt_dir):
+                        for f in files:
+                            if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
+                                prefix = os.path.join(root, f[:f.rfind('_token2char')])
+                                loaded_vocab = load_vocab(prefix)
+                                if loaded_vocab:
+                                    token2char = loaded_vocab
+                                    char2token = {char: idx for idx, char in token2char.items()}
+                                    vocab_loaded = True
+                                    print(f"✅ 词表加载成功（来自checkpoint目录），词表大小: {len(token2char)}")
+                                    break
+                        if vocab_loaded:
+                            break
+                if vocab_loaded:
+                    break
+    except Exception as e:
+        print(f"⚠️ 从checkpoint目录加载词表失败: {e}")
+
+# 最后尝试：在uploads目录下搜索词表文件
+if not vocab_loaded:
+    try:
+        uploads_dir = 'uploads'
+        if os.path.exists(uploads_dir):
+            for root, dirs, files in os.walk(uploads_dir):
+                for f in files:
+                    if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
+                        prefix = os.path.join(root, f[:f.rfind('_token2char')])
+                        loaded_vocab = load_vocab(prefix)
+                        if loaded_vocab:
+                            token2char = loaded_vocab
+                            char2token = {char: idx for idx, char in token2char.items()}
+                            vocab_loaded = True
+                            print(f"✅ 词表加载成功（来自uploads目录），词表大小: {len(token2char)}")
+                            break
+                if vocab_loaded:
+                    break
+    except Exception as e:
+        print(f"⚠️ 从uploads目录加载词表失败: {e}")
+
+if not vocab_loaded:
+    print("❌ 无法加载训练词表！生成结果将无法正确解码为文字")
+    print("请确保训练数据目录下存在词表文件（*_token2char.pth）")
+
+# 3. 分词/反分词函数（必须和训练时的TextDataset分词逻辑完全一致）
+def tokenize(text, vocab_size, pad_token_id=0):
+    """使用训练时的显式词表进行分词，和TextDataset的char2token映射一致"""
+    if char2token is not None:
+        # 使用训练时保存的显式词表映射（和训练完全一致）
+        unknown_idx = list(char2token.values())[0] if char2token else 0
+        tokens = [char2token.get(char, unknown_idx) for char in text]
+    else:
+        # 兜底：无词表时按字分词，用排序后的字符集映射（和TextDataset初始化逻辑一致）
+        char_set = sorted(set(text))
+        fallback_vocab = {char: idx for idx, char in enumerate(char_set)}
+        unknown_idx = 0
+        tokens = [fallback_vocab.get(char, unknown_idx) for char in text]
+    return torch.tensor(tokens, dtype=torch.long, device='cpu')
+
+def detokenize(token_ids, vocab_size):
+    """使用训练时的显式词表将token ID还原为文字"""
+    if isinstance(token_ids, torch.Tensor):
+        token_ids = token_ids.tolist()
+    if token2char is not None:
+        # 使用训练时保存的显式词表反向映射，还原为可读文字
+        chars = []
+        for tok in token_ids:
+            if tok in token2char:
+                chars.append(token2char[tok])
+            # 跳过pad_token和-100等特殊标记
+        return "".join(chars)
+    else:
+        # 无词表兜底：输出数字标记
+        return " ".join([f"<tok_{tok}>" for tok in token_ids if tok != 0])
+
+# -------------------------- 生成测试 --------------------------
+print("=" * 60)
+print(f"🎯 开始生成测试 | Prompt: {PROMPT}")
+print(f"生成参数: 温度={TEMPERATURE}, top_k={TOP_K}, 最大生成长度={MAX_NEW_TOKENS}")
+print("=" * 60)
+
+prompt_ids = tokenize(PROMPT, model.vocab_size, model.pad_token_id).unsqueeze(0)
+# 长度截断，避免超过模型最大长度
+if prompt_ids.size(1) > model.max_seq_len:
+    prompt_ids = prompt_ids[:, -model.max_seq_len:]
+    print(f"⚠️ Prompt长度超过模型最大长度{model.max_seq_len}，已自动截断到后{model.max_seq_len}个token")
+print(f"Prompt转Token结果: {detokenize(prompt_ids[0], model.vocab_size)}")
+
+with torch.no_grad():
+    try:
+        generated_ids = model.generate(
+            prompt_ids=prompt_ids,
+            max_new_tokens=MAX_NEW_TOKENS,
+            temperature=TEMPERATURE,
+            top_k=TOP_K,
+            pad_token_id=model.pad_token_id,
+            eos_token_id=None
+        )
+    except Exception as e:
+        print(f"❌ 生成失败：{str(e)}")
+        print("请检查：1. 模型参数是否正确 2. 提示词token是否超出词表范围")
+        exit()
+
+# 解码生成结果
+generated_tokens = generated_ids[0][prompt_ids.size(1):]
+generated_text = detokenize(generated_tokens, model.vocab_size)
+full_text = detokenize(generated_ids[0], model.vocab_size)
+
+print(f"原始完整Token序列: {generated_ids[0].tolist()}")
+print(f"✅ 生成结果: {generated_text}")
+print(f"✅ 完整文本（含Prompt）: {full_text}")
+print(f"✅ 生成统计: Prompt长度 {len(prompt_ids[0])} token | 生成长度 {len(generated_tokens)} token | 总长度 {len(generated_ids[0])} token")
+print("=== 测试完成 ===")

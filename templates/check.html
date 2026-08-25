@@ -396,264 +396,47 @@
         let selectedTestDataPath = null;
         let isRunning = false;
 
-        // 默认测试代码模板（新增head_mode完整检测逻辑）
-        const codeTemplates = {
-            image: `# CNN图片模型测试模板
-import torch
-import os
-from torch.utils.data import DataLoader
-from model import SimpleResNet, ImageDataset
-from model_io import load_model
-from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+        // 测试代码模板已迁移至本地 test_templates/ 目录，经 /api/test_template/<name> 按需加载。
+        // 此处仅保留 head_mode 的内置兜底文本（接口不可用时仍可离线填充）。
+        const _templateCache = {};      // 已拉取的模板缓存
+        const _templatePending = {};    // 进行中的请求去重
+        const codeTemplates = {};       // 兼容旧引用点：加载结果会回写到此处
 
-# -------------------------- 可修改参数 --------------------------
-BATCH_SIZE = 32
-IMAGE_SIZE = 224
-# -----------------------------------------------------------------
+        async function loadCodeTemplate(name) {
+            if (_templateCache[name]) return _templateCache[name];
+            if (!_templatePending[name]) {
+                _templatePending[name] = fetch(`/api/test_template/${name}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.status !== 'success') throw new Error(d.message || '模板加载失败');
+                        _templateCache[name] = d.code;
+                        codeTemplates[name] = d.code;   // 回写，兼容旧引用
+                        return d.code;
+                    })
+                    .finally(() => { delete _templatePending[name]; });
+            }
+            return _templatePending[name];
+        }
 
-# 1. 加载模型（自动注入模型路径，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
-print("正在加载模型...")
-model = load_model(model_path, map_location='cpu')
-model.eval()
-print(f"模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+        function fallbackTemplate(name) {
+            return _builtinFallbacks[name] ||
+                '# 模板加载失败，请刷新页面重试；或直接手动编写测试代码\n';
+        }
 
-# 2. 加载测试数据集（自动注入测试数据路径，无需修改）
-print("\\n正在加载测试数据集...")
-dataset = ImageDataset(test_data_path, image_size=IMAGE_SIZE)
-loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
-print(f"测试集共 {len(dataset)} 个样本，{dataset.num_classes} 个类别")
-class_names = list(dataset.classes.keys())  # 类别名映射
+        // 按框架名把模板填入编辑器（失败时回退内置兜底并提示）
+        async function applyCodeTemplate(name) {
+            const editor = document.getElementById('testCode');
+            try {
+                editor.value = await loadCodeTemplate(name);
+            } catch (e) {
+                console.error('模板加载失败:', e);
+                editor.value = fallbackTemplate(name);
+            }
+            refreshEditor();
+        }
 
-# 3. 逐样本输出识别结果
-correct = 0
-total = 0
-all_preds = []
-all_labels = []
-
-print("\\n" + "="*60)
-print("开始逐样本识别，输出所有结果：")
-print("="*60)
-
-with torch.no_grad():
-    for batch_idx, (imgs, labels) in enumerate(loader):
-        outputs = model(imgs)
-        # 计算置信度
-        probs = torch.softmax(outputs, dim=1)
-        confs, preds = probs.max(1)
-        
-        # 遍历当前批次每个样本，输出详情
-        for i in range(len(imgs)):
-            global_idx = batch_idx * BATCH_SIZE + i
-            if global_idx >= len(dataset):
-                break
-            
-            # 获取样本信息
-            img_path = dataset.image_files[global_idx]
-            filename = os.path.basename(img_path)
-            true_label = labels[i].item()
-            pred_label = preds[i].item()
-            true_cls = class_names[true_label] if true_label < len(class_names) else f"未知{true_label}"
-            pred_cls = class_names[pred_label] if pred_label < len(class_names) else f"未知{pred_label}"
-            conf = confs[i].item() * 100
-            mark = "✅" if true_label == pred_label else "❌"
-            
-            # 输出单样本结果
-            print(f"{mark} 文件: {filename:<30} | 真实: {true_cls:<10} | 预测: {pred_cls:<10} | 置信度: {conf:.2f}%")
-            
-            # 统计指标
-            total += 1
-            if true_label == pred_label:
-                correct += 1
-            all_preds.append(pred_label)
-            all_labels.append(true_label)
-        
-        # 每10批次打印一次进度
-        if batch_idx % 10 == 0:
-            cur_acc = 100. * correct / total if total>0 else 0
-            print(f"\\n--- 已处理 {batch_idx+1}/{len(loader)} 批次，当前准确率: {cur_acc:.2f}% ---\\n")
-
-# 4. 输出最终统计
-accuracy = 100. * correct / total
-print("\\n" + "="*60)
-print(f"✅ 测试完成")
-print(f"总样本数: {total}")
-print(f"正确数: {correct}")
-print(f"错误数: {total - correct}")
-print(f"准确率: {accuracy:.2f}%")
-print("="*60)
-# 保留固定格式，方便后端解析指标
-print(f"准确率：{accuracy:.2f}%")`,
-text: `# Transformer生成式文本模型测试模板（修复版，适配删除MoE后的模型）
-import torch
-import math
-import os
-from model import TextTransformerModel, TextDataset
-
-# -------------------------- 可修改参数（必须用英文引号""，不要用中文引号） --------------------------
-BATCH_SIZE = 8          # 生成批次大小
-MAX_NEW_TOKENS = 20     # 测试时先设小一点，确认有输出再调大
-TEMPERATURE = 1.0       # 测试时先设1.0，关闭随机性
-TOP_K = 0               # 测试时先关闭top_k过滤
-PROMPT = "今天天气真"   # 测试生成用的起始文本，可随意修改
-# -----------------------------------------------------------------
-
-# 1. 加载模型（自动注入，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
-print("正在加载模型...")
-try:
-    from model_io import load_model, load_vocab
-    model = load_model(model_path, map_location='cpu')
-    model.eval()
-    print(f"✅ 模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
-    print(f"模型配置: vocab_size={model.vocab_size}, max_seq_len={model.max_seq_len}, MoE={model.use_moe}, MLA={model.use_mla}")
-except Exception as e:
-    print(f"❌ 模型加载失败：{str(e)}")
-    print("请检查：1. model_path是否正确 2. 模型是否是用当前model.py训练的 3. 模型文件是否损坏")
-    exit()
-
-# 2. 加载训练时保存的词表（必须和训练时的TextDataset分词逻辑完全一致）
-#    训练时TextDataset会将词表保存为 {数据目录}_token2char.pth
-char2token = None
-token2char = None
-
-# 尝试从模型metadata中获取训练数据路径，进而找到词表文件
-vocab_loaded = False
-try:
-    if hasattr(model, '_metadata') and isinstance(model._metadata, dict):
-        train_params = model._metadata.get('train_params', {})
-        data_path = train_params.get('data_path', '')
-        if data_path:
-            loaded_vocab = load_vocab(data_path.rstrip('/'))
-            if loaded_vocab:
-                token2char = loaded_vocab
-                char2token = {char: idx for idx, char in token2char.items()}
-                vocab_loaded = True
-                print(f"✅ 词表加载成功（来自训练数据目录），词表大小: {len(token2char)}")
-except Exception as e:
-    print(f"⚠️ 从metadata加载词表失败: {e}")
-
-# 如果metadata方式失败，尝试从模型同目录的checkpoint中查找词表
-if not vocab_loaded:
-    try:
-        model_dir = os.path.dirname(model_path)
-        # 搜索模型目录下所有checkpoint子目录
-        for item in os.listdir(model_dir):
-            if item.startswith('checkpoints_'):
-                ckpt_dir = os.path.join(model_dir, item)
-                if os.path.isdir(ckpt_dir):
-                    # 在checkpoint目录中查找词表文件
-                    for root, dirs, files in os.walk(ckpt_dir):
-                        for f in files:
-                            if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
-                                prefix = os.path.join(root, f[:f.rfind('_token2char')])
-                                loaded_vocab = load_vocab(prefix)
-                                if loaded_vocab:
-                                    token2char = loaded_vocab
-                                    char2token = {char: idx for idx, char in token2char.items()}
-                                    vocab_loaded = True
-                                    print(f"✅ 词表加载成功（来自checkpoint目录），词表大小: {len(token2char)}")
-                                    break
-                        if vocab_loaded:
-                            break
-                if vocab_loaded:
-                    break
-    except Exception as e:
-        print(f"⚠️ 从checkpoint目录加载词表失败: {e}")
-
-# 最后尝试：在uploads目录下搜索词表文件
-if not vocab_loaded:
-    try:
-        uploads_dir = 'uploads'
-        if os.path.exists(uploads_dir):
-            for root, dirs, files in os.walk(uploads_dir):
-                for f in files:
-                    if f.endswith('_token2char.pth') or f.endswith('_token2char.json'):
-                        prefix = os.path.join(root, f[:f.rfind('_token2char')])
-                        loaded_vocab = load_vocab(prefix)
-                        if loaded_vocab:
-                            token2char = loaded_vocab
-                            char2token = {char: idx for idx, char in token2char.items()}
-                            vocab_loaded = True
-                            print(f"✅ 词表加载成功（来自uploads目录），词表大小: {len(token2char)}")
-                            break
-                if vocab_loaded:
-                    break
-    except Exception as e:
-        print(f"⚠️ 从uploads目录加载词表失败: {e}")
-
-if not vocab_loaded:
-    print("❌ 无法加载训练词表！生成结果将无法正确解码为文字")
-    print("请确保训练数据目录下存在词表文件（*_token2char.pth）")
-
-# 3. 分词/反分词函数（必须和训练时的TextDataset分词逻辑完全一致）
-def tokenize(text, vocab_size, pad_token_id=0):
-    """使用训练时的显式词表进行分词，和TextDataset的char2token映射一致"""
-    if char2token is not None:
-        # 使用训练时保存的显式词表映射（和训练完全一致）
-        unknown_idx = list(char2token.values())[0] if char2token else 0
-        tokens = [char2token.get(char, unknown_idx) for char in text]
-    else:
-        # 兜底：无词表时按字分词，用排序后的字符集映射（和TextDataset初始化逻辑一致）
-        char_set = sorted(set(text))
-        fallback_vocab = {char: idx for idx, char in enumerate(char_set)}
-        unknown_idx = 0
-        tokens = [fallback_vocab.get(char, unknown_idx) for char in text]
-    return torch.tensor(tokens, dtype=torch.long, device='cpu')
-
-def detokenize(token_ids, vocab_size):
-    """使用训练时的显式词表将token ID还原为文字"""
-    if isinstance(token_ids, torch.Tensor):
-        token_ids = token_ids.tolist()
-    if token2char is not None:
-        # 使用训练时保存的显式词表反向映射，还原为可读文字
-        chars = []
-        for tok in token_ids:
-            if tok in token2char:
-                chars.append(token2char[tok])
-            # 跳过pad_token和-100等特殊标记
-        return "".join(chars)
-    else:
-        # 无词表兜底：输出数字标记
-        return " ".join([f"<tok_{tok}>" for tok in token_ids if tok != 0])
-
-# -------------------------- 生成测试 --------------------------
-print("=" * 60)
-print(f"🎯 开始生成测试 | Prompt: {PROMPT}")
-print(f"生成参数: 温度={TEMPERATURE}, top_k={TOP_K}, 最大生成长度={MAX_NEW_TOKENS}")
-print("=" * 60)
-
-prompt_ids = tokenize(PROMPT, model.vocab_size, model.pad_token_id).unsqueeze(0)
-# 长度截断，避免超过模型最大长度
-if prompt_ids.size(1) > model.max_seq_len:
-    prompt_ids = prompt_ids[:, -model.max_seq_len:]
-    print(f"⚠️ Prompt长度超过模型最大长度{model.max_seq_len}，已自动截断到后{model.max_seq_len}个token")
-print(f"Prompt转Token结果: {detokenize(prompt_ids[0], model.vocab_size)}")
-
-with torch.no_grad():
-    try:
-        generated_ids = model.generate(
-            prompt_ids=prompt_ids,
-            max_new_tokens=MAX_NEW_TOKENS,
-            temperature=TEMPERATURE,
-            top_k=TOP_K,
-            pad_token_id=model.pad_token_id,
-            eos_token_id=None
-        )
-    except Exception as e:
-        print(f"❌ 生成失败：{str(e)}")
-        print("请检查：1. 模型参数是否正确 2. 提示词token是否超出词表范围")
-        exit()
-
-# 解码生成结果
-generated_tokens = generated_ids[0][prompt_ids.size(1):]
-generated_text = detokenize(generated_tokens, model.vocab_size)
-full_text = detokenize(generated_ids[0], model.vocab_size)
-
-print(f"原始完整Token序列: {generated_ids[0].tolist()}")
-print(f"✅ 生成结果: {generated_text}")
-print(f"✅ 完整文本（含Prompt）: {full_text}")
-print(f"✅ 生成统计: Prompt长度 {len(prompt_ids[0])} token | 生成长度 {len(generated_tokens)} token | 总长度 {len(generated_ids[0])} token")
-print("=== 测试完成 ===")`,
-            // 新增head_mode完整检测代码模板，直接运行即可出结果
+        // head_mode 内置兜底（完整检测代码，可直接离线运行）
+        const _builtinFallbacks = {
             head_mode: `# 手部关键点检测（官方Tasks API标准写法，上传图片直接运行）
 import cv2
 import numpy as np
@@ -852,10 +635,8 @@ else:
             // 扩大页面宽度以适配代码编辑器
             const wrapper = document.querySelector('.app-wrapper');
             if (wrapper) wrapper.style.maxWidth = '1400px';
-            // 设置默认代码
-            const editor = document.getElementById('testCode');
-            editor.value = codeTemplates[currentFramework];
-            refreshEditor();
+            // 设置默认代码（从本地 test_templates/ 按需加载）
+            applyCodeTemplate(currentFramework);
             // 加载模型列表
             loadModels();
             // 绑定上传事件
@@ -873,10 +654,8 @@ else:
         // 框架切换逻辑
         function onFrameworkChange() {
             currentFramework = document.getElementById('frameworkSelect').value;
-            // 切换代码模板
-            const editor = document.getElementById('testCode');
-            editor.value = codeTemplates[currentFramework];
-            refreshEditor();
+            // 切换代码模板（按需加载，失败回退内置兜底）
+            applyCodeTemplate(currentFramework);
             // 切换上传提示和卡片显示状态
             updateUploadTip();
             // head_mode下模型选择自动禁用，显示内置模型
@@ -1053,9 +832,7 @@ else:
 
         // 恢复默认代码模板
         function resetCode() {
-            const editor = document.getElementById('testCode');
-            editor.value = codeTemplates[currentFramework];
-            refreshEditor();
+            applyCodeTemplate(currentFramework);
         }
 
         // 清空结果
@@ -1083,10 +860,11 @@ else:
                 alert(currentFramework === 'image' ? '请先上传测试数据集' : '请先上传手部照片');
                 return;
             }
-            // 测试代码非空校验，head_mode下自动填充默认代码
+            // 测试代码非空校验，head_mode下自动填充默认代码（已缓存模板优先，否则用内置兜底）
             if (!testCode) {
                 if (currentFramework === 'head_mode') {
-                    document.getElementById('testCode').value = codeTemplates.head_mode;
+                    document.getElementById('testCode').value =
+                        _templateCache.head_mode || fallbackTemplate('head_mode');
                 } else {
                     alert('测试代码不能为空');
                     return;

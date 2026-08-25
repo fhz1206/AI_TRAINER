@@ -1,0 +1,85 @@
+# CNN图片模型测试模板
+import torch
+import os
+from torch.utils.data import DataLoader
+from model import SimpleResNet, ImageDataset
+from model_io import load_model
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+
+# -------------------------- 可修改参数 --------------------------
+BATCH_SIZE = 32
+IMAGE_SIZE = 224
+# -----------------------------------------------------------------
+
+# 1. 加载模型（自动注入模型路径，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
+print("正在加载模型...")
+model = load_model(model_path, map_location='cpu')
+model.eval()
+print(f"模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+
+# 2. 加载测试数据集（自动注入测试数据路径，无需修改）
+print("\n正在加载测试数据集...")
+dataset = ImageDataset(test_data_path, image_size=IMAGE_SIZE)
+loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+print(f"测试集共 {len(dataset)} 个样本，{dataset.num_classes} 个类别")
+class_names = list(dataset.classes.keys())  # 类别名映射
+
+# 3. 逐样本输出识别结果
+correct = 0
+total = 0
+all_preds = []
+all_labels = []
+
+print("\n" + "="*60)
+print("开始逐样本识别，输出所有结果：")
+print("="*60)
+
+with torch.no_grad():
+    for batch_idx, (imgs, labels) in enumerate(loader):
+        outputs = model(imgs)
+        # 计算置信度
+        probs = torch.softmax(outputs, dim=1)
+        confs, preds = probs.max(1)
+        
+        # 遍历当前批次每个样本，输出详情
+        for i in range(len(imgs)):
+            global_idx = batch_idx * BATCH_SIZE + i
+            if global_idx >= len(dataset):
+                break
+            
+            # 获取样本信息
+            img_path = dataset.image_files[global_idx]
+            filename = os.path.basename(img_path)
+            true_label = labels[i].item()
+            pred_label = preds[i].item()
+            true_cls = class_names[true_label] if true_label < len(class_names) else f"未知{true_label}"
+            pred_cls = class_names[pred_label] if pred_label < len(class_names) else f"未知{pred_label}"
+            conf = confs[i].item() * 100
+            mark = "✅" if true_label == pred_label else "❌"
+            
+            # 输出单样本结果
+            print(f"{mark} 文件: {filename:<30} | 真实: {true_cls:<10} | 预测: {pred_cls:<10} | 置信度: {conf:.2f}%")
+            
+            # 统计指标
+            total += 1
+            if true_label == pred_label:
+                correct += 1
+            all_preds.append(pred_label)
+            all_labels.append(true_label)
+        
+        # 每10批次打印一次进度
+        if batch_idx % 10 == 0:
+            cur_acc = 100. * correct / total if total>0 else 0
+            print(f"\n--- 已处理 {batch_idx+1}/{len(loader)} 批次，当前准确率: {cur_acc:.2f}% ---\n")
+
+# 4. 输出最终统计
+accuracy = 100. * correct / total
+print("\n" + "="*60)
+print(f"✅ 测试完成")
+print(f"总样本数: {total}")
+print(f"正确数: {correct}")
+print(f"错误数: {total - correct}")
+print(f"准确率: {accuracy:.2f}%")
+print("="*60)
+# 保留固定格式，方便后端解析指标
+print(f"准确率：{accuracy:.2f}%")

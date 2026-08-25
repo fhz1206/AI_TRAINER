@@ -66,6 +66,29 @@ def _init_hand_models():
     return _global_hand_models
 # -----------------------------------------------------------------------------------
 # -------------------------- 原有上传接口，完全保留逻辑，仅新增head_mode适配 --------------------------
+# -------------------------- 本地测试代码模板接口 --------------------------
+_TEST_TEMPLATE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test_templates')
+_TEST_TEMPLATE_WHITELIST = ('image', 'text', 'head_mode')
+
+
+@test_bp.route('/api/test_template/<name>')
+@login_required
+def api_test_template(name):
+    """返回本地测试示例代码（白名单校验，防目录穿越）"""
+    key = (name or '').lower()
+    if key not in _TEST_TEMPLATE_WHITELIST:
+        return jsonify({'status': 'error',
+                        'message': f'未知模板，可选: {list(_TEST_TEMPLATE_WHITELIST)}'}), 404
+    path = os.path.join(_TEST_TEMPLATE_DIR, f'{key}.py.txt')
+    try:
+        with open(path, encoding='utf-8') as f:
+            code = f.read()
+    except OSError:
+        return jsonify({'status': 'error', 'message': '模板文件缺失'}), 404
+    return jsonify({'status': 'success', 'name': key, 'code': code})
+
+
 @test_bp.route('/api/upload_test_data', methods=['POST'])
 @login_required
 def upload_test_data():
