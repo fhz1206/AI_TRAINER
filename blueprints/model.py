@@ -35,7 +35,7 @@ def api_list_models():
     
     result = []
     for f in sorted(listdir(user_dir), reverse=True):
-        if f.endswith(('.pth', '.safetensors')):
+        if f.endswith('.safetensors'):
             filepath = os_path.join(user_dir, f)
             file_size = os_path.getsize(filepath)
             model_type = '🖼️ CNN' if 'cnn' in f else '📝 Transformer' if 'text' in f else '📦 模型'

@@ -37,7 +37,7 @@ try:
 
     # --------------------- 阶段4：加载训练核心模块（50→65%） ---------------------
     print("  [4/7] 加载训练核心模块...")
-    from trainer import train_image_model, train_text_model
+    from trainers import TRAIN_FUNCTIONS, TRAIN_TYPES  # noqa: F401
 
     # --------------------- 阶段5：加载业务蓝图模块（65→85%） ---------------------
     print("  [5/7] 加载业务模块...")

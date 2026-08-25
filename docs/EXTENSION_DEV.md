@@ -254,8 +254,8 @@ def init_extension(app):
 扩展可以直接导入并使用平台的核心模块：
 
 ```python
-from model import SimpleResNet, TextTransformerModel  # 复用模型
-from trainer import train_image_model, train_text_model  # 复用训练器
+from model_zoo import build_model  # 复用模型（按注册名构建）
+from trainers import start_training_thread  # 复用训练分发
 from database import get_db, save_model_record  # 操作数据库
 from state import training_tasks  # 访问训练状态
 ```

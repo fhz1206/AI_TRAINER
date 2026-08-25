@@ -66,9 +66,8 @@ Windows_ITPP/
 ├── app_logger.py           # 全局请求日志（轮转 + 内存友好）
 ├── config.py               # 全局配置
 ├── database.py             # SQLite3 数据库管理
-├── model.py                # 数据管线（Dataset/LRU缓存）+ 兼容门面
+├── model.py                # 数据管线（LRU缓存 / ImageDataset / TextDataset）
 ├── model_io.py             # 模型存取统一入口（safetensors + 元数据旁车）
-├── trainer.py              # 兼容垫片（训练实现已迁移 trainers 包）
 ├── state.py                # 训练任务状态（内存）
 ├── cleanup.py              # 存储清理机制
 ├── resource_limits.py      # 资源占用上限（默认系统一半）
@@ -86,7 +85,6 @@ Windows_ITPP/
 │   ├── text.py             #   Decoder-only 文本生成（积木式注意力+MoE）
 │   ├── diffusion.py        #   扩散生成 DDPM / 扩散编辑适配
 │   ├── multimodal.py       #   多模态单流（图文 Decoder-only）
-│   └── legacy.py           #   旧版组件存档（仅供历史 .pth 反序列化）
 ├── trainers/               # 训练器包（按训练类型分发）
 │   ├── image_cls.py        #   图像分类（CNN/ViT 统一入口）
 │   ├── text_gen.py         #   文本生成训练

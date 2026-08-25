@@ -326,7 +326,7 @@ def list_user_models():
     }
     target_type = framework_to_model_type.get(framework, framework)
     for f in os.listdir(models_dir):
-        if f.endswith(('.pth', '.safetensors')):
+        if f.endswith('.safetensors'):
             model_type = 'other'
             f_lower = f.lower()
             # 按训练产物文件名前缀归类（与 trainers 各实现保持一致）

@@ -2,7 +2,7 @@
 import torch
 import os
 from torch.utils.data import DataLoader
-from model import SimpleResNet, ImageDataset
+from model import ImageDataset
 from model_io import load_model
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
@@ -11,7 +11,7 @@ BATCH_SIZE = 32
 IMAGE_SIZE = 224
 # -----------------------------------------------------------------
 
-# 1. 加载模型（自动注入模型路径，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
+# 1. 加载模型（自动注入模型路径，无需修改）
 print("正在加载模型...")
 model = load_model(model_path, map_location='cpu')
 model.eval()

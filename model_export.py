@@ -12,14 +12,12 @@ model_export.py — 标准模型导出包组装器
     ├── preprocessor_config.json   # 多模态专属：图像预处理配置
     └── LICENSE                    # BSD-3-Clause 许可证
 
-旧版 .pth 整对象权重在导出时自动转换为 Safetensors。
 """
 import io
 import json
 import os
 import zipfile
 
-import torch
 from safetensors.torch import load_file, save as st_save
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -119,30 +117,18 @@ def _build_config(meta, model_type):
     }
 
 
-def _load_state_dict_any(weight_path):
-    """
-    统一取权重：safetensors 直接读；旧 .pth 整对象转 state_dict。
-    返回 (state_dict 或 None, 来源说明)。无法解析时返回 (None, reason)。
-    """
-    if weight_path.endswith('.safetensors'):
-        return load_file(weight_path), 'safetensors'
-    try:
-        obj = torch.load(weight_path, map_location='cpu', weights_only=False)
-    except Exception:
-        return None, 'unreadable-pth'
-    if hasattr(obj, 'state_dict'):
-        return {k: v.detach().contiguous().clone()
-                for k, v in obj.state_dict().items()}, 'pth-converted'
-    return None, 'not-a-module'
+def _load_state_dict(weight_path):
+    """读取 safetensors 权重为 state_dict"""
+    return load_file(weight_path)
 
 
 def _find_char_vocab(weight_path, meta):
-    """定位训练期落盘的字符级词表（*_token2char.json / .pth），返回 token2char 或 None"""
+    """定位训练期落盘的字符级词表（*_token2char.json），返回 token2char 或 None"""
     candidates = []
     data_path = (meta.get('train_params') or {}).get('data_path', '')
     if data_path:
         base = data_path.rstrip('/\\')
-        candidates += [base + '_token2char.json', base + '_token2char.pth']
+        candidates.append(base + '_token2char.json')
     # 模型同目录兜底搜索（按时间最近）
     model_dir = os.path.dirname(weight_path) or '.'
     try:
@@ -159,11 +145,6 @@ def _find_char_vocab(weight_path, meta):
                 with open(p, encoding='utf-8') as f:
                     return {int(k): v for k, v in json.load(f).items()}
             except (OSError, ValueError):
-                continue
-        if p.endswith('.pth') and os.path.exists(p):
-            try:
-                return torch.load(p, map_location='cpu', weights_only=False)
-            except Exception:
                 continue
     return None
 
@@ -250,13 +231,6 @@ def build_standard_zip(weight_path):
     filename = os.path.basename(weight_path)
     stem = filename.rsplit('.', 1)[0]
     meta = _load_sidecar_meta(weight_path)
-    if not meta and weight_path.endswith('.pth'):
-        # 旧整对象权重：尝试读出挂载的 _metadata 作为配置来源
-        try:
-            obj = torch.load(weight_path, map_location='cpu', weights_only=False)
-            meta = dict(getattr(obj, '_metadata', {}) or {})
-        except Exception:
-            meta = {}
 
     model_type = _model_type(meta, weight_path)
     config = _build_config(meta, model_type)
@@ -264,16 +238,10 @@ def build_standard_zip(weight_path):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         # ---- 权重（统一 model.safetensors）----
-        sd, source = _load_state_dict_any(weight_path)
-        if sd is not None:
-            config['format']['weight_source'] = source
-            # st_save 直接返回字节串（本环境 save_file 不支持内存缓冲）
-            zf.writestr('model.safetensors', st_save(sd))
-        else:
-            # 完全不可解析：原样打包并注明，保证下载不失败
-            config['format']['weight_source'] = source
-            with open(weight_path, 'rb') as f:
-                zf.writestr(filename, f.read())
+        sd = _load_state_dict(weight_path)
+        config['format']['weight_source'] = 'safetensors'
+        # st_save 直接返回字节串（本环境 save_file 不支持内存缓冲）
+        zf.writestr('model.safetensors', st_save(sd))
 
         # ---- 架构配置 ----
         zf.writestr('config.json', json.dumps(config, ensure_ascii=False, indent=2))

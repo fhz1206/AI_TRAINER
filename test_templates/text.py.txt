@@ -2,7 +2,7 @@
 import torch
 import math
 import os
-from model import TextTransformerModel, TextDataset
+from model import TextDataset
 
 # -------------------------- 可修改参数（必须用英文引号""，不要用中文引号） --------------------------
 BATCH_SIZE = 8          # 生成批次大小
@@ -12,7 +12,7 @@ TOP_K = 0               # 测试时先关闭top_k过滤
 PROMPT = "今天天气真"   # 测试生成用的起始文本，可随意修改
 # -----------------------------------------------------------------
 
-# 1. 加载模型（自动注入，无需修改；支持 .safetensors 新格式与 .pth 旧格式）
+# 1. 加载模型（自动注入，无需修改）
 print("正在加载模型...")
 try:
     from model_io import load_model, load_vocab
@@ -26,7 +26,7 @@ except Exception as e:
     exit()
 
 # 2. 加载训练时保存的词表（必须和训练时的TextDataset分词逻辑完全一致）
-#    训练时TextDataset会将词表保存为 {数据目录}_token2char.pth
+#    训练时TextDataset会将词表保存为 {数据目录}_token2char.json
 char2token = None
 token2char = None
 
@@ -97,7 +97,7 @@ if not vocab_loaded:
 
 if not vocab_loaded:
     print("❌ 无法加载训练词表！生成结果将无法正确解码为文字")
-    print("请确保训练数据目录下存在词表文件（*_token2char.pth）")
+    print("请确保训练数据目录下存在词表文件（*_token2char.json）")
 
 # 3. 分词/反分词函数（必须和训练时的TextDataset分词逻辑完全一致）
 def tokenize(text, vocab_size, pad_token_id=0):

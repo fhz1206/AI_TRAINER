@@ -1,13 +1,10 @@
 """
-model.py — 数据集工具 + 兼容门面
+model.py — 数据管线
 
-职责：
-1. 数据管线：LRUCache / ImageDataset / TextDataset（全平台共用）
-2. 兼容门面：重新导出 models 包中的模型类，保持既有导入路径可用
-   （from model import SimpleResNet, TextTransformerModel），
-   并让历史 .pth 检查点（pickle 按 model.* 路径找类）继续可反序列化。
+职责：LRUCache / ImageDataset / TextDataset（全平台共用的数据工具）。
 
-新代码请直接从 models / architectures 包导入；本文件不再定义网络结构。
+模型定义在 model_zoo 包、存取在 model_io、训练在 trainers 包；
+本文件不再包含任何网络结构或旧版兼容导出。
 """
 import json
 import os
@@ -22,11 +19,6 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
-
-# 兼容导出：结构不变的模型直接来自 model_zoo 包；TextTransformerModel 绑定旧版完整实现，
-# 使历史 .pth 整对象检查点反序列化后仍走当年的 forward/generate（新版积木式实现在 model_zoo.text）
-from model_zoo.vision import ConvBlock, SimpleResNet, ViTModel          # noqa: F401
-from model_zoo.legacy import TextTransformerModel, MoELayer             # noqa: F401
 
 import warnings
 from random import randint, seed as random_seed
