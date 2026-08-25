@@ -6,11 +6,11 @@
 
 </div>
 
-> 基于 Flask + PyTorch 的深度学习训练与测试平台，支持 CNN 图像分类和 Transformer 文本生成模型的全流程训练、管理与测试。
+> 基于 Flask + PyTorch 的深度学习训练与测试平台：覆盖 **CNN / ViT 图像分类、扩散图像生成与编辑、Decoder-only 文本生成（LLM）、多模态图文单流** 六类模型的全流程训练、管理与测试。注意力机制（full / flash / linear）像搭积木一样在 Web 端自由切换，训练产物统一导出为 **Safetensors 标准包**（权重 + config.json + 分词器文件 + LICENSE）。
 
 > 用户和管理员的使用说明请查看使用说明查找表
 
-> **生态联动**：AI_TRAINER <img src="AI_TRAINER-logo.png" width="18"/> × [CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer) <img src="CostCut-Infer-logo.png">
+> **生态联动**：[CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer) <img src="CostCut-Infer-logo.png" width="72"/>
 ---
 # 使用说明查找表
 | 用户使用说明 | 管理员使用说明 |
@@ -18,36 +18,38 @@
 | [docs/DirectionsUser.md](docs/DirectionsUser.md) | [docs/DirectionsAdmin.md](docs/DirectionsAdmin.md) |
 ---
 
-# 预计更新
-## v1.2.0 添加扩展功能，当前将会兼容CodeMate项目，不过该项目也将会适配本项目（coding 1/2）
+# 更新日志
 
-# 已经更新
-## v1.0.1 修复一堆问题
-修复切换页面后训练进度丢失的问题；
-修复分词部分空格没有分token的问题；
-修复admin页面无直接跳转至学习等页面的问题；
-修复测试页面部分下拉框背景颜色问题；
-修复admin页面部分内容宽度异常的问题；
-修复admin页面实时服务器负载数据显示的线条不够柔顺的问题，优化了用户体验； 
-修复admin页面搜索时`|`在emoji符号前的问题；
-修复web页面的icon异常的问题，修复admin页面转到别的页面的路口不全的问题
-优化页面背景
-## v1.1.0 添加队列管理系统和资源限制系统
+## v1.2.x 当前版本亮点
+- **模型架构积木化**：新增 ViT 图像分类、扩散图像生成/编辑、多模态图文单流；
+  注意力机制 full / flash(默认) / linear 在 Web 端像搭积木一样切换；MoE 修复广播 bug
+- **标准模型导出包**：所有模型一键下载 Safetensors 标准结构
+  （model.safetensors + config.json + vocab.json / merges.txt + 多模态视觉编码器权重 + LICENSE）
+- **测试页全覆盖**：七类模型（含手部检测）均可选模型 → 自动填充本地模板 → 一键运行测试
+- **资源占用上限**：默认取系统一半资源（CPU 线程 / 内存），超限拒绝新训练，管理端可调
+- **存储治理**：轮转日志（单文件 5MB×5）、管理员自动/手动清理过期文件与日志
+- **性能优化**：移除训练人工延时、DataLoader 多进程化（受限环境自动回退单进程）
+- **CI/CD**：`.gitcode/workflows` 流水线自动执行全量编译检查与六类训练 E2E 回归
+
+## 历史
+- v1.1.0 队列管理系统与带宽限制系统
+- v1.0.1 大量体验修复（进度保持、分词、admin 页面等）
 ---
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 后端框架 | Flask |
-| 深度学习 | PyTorch + torchvision |
-| 图像处理 | Pillow, OpenCV |
-| 手势识别 | MediaPipe |
-| 系统监控 | psutil |
+| 后端框架 | Flask + flask-cors |
+| 深度学习 | PyTorch + torchvision（可选 torch.compile 加速） |
+| 模型格式 | SafeTensors（权重）+ config.json 元数据旁车 |
+| 图像处理 | OpenCV（中文路径安全解码）、torchvision |
+| 手势识别 | MediaPipe Tasks |
+| 系统监控 | psutil（CPU/RAM 监控与资源上限） |
 | 数据库 | SQLite3 (WAL 模式) |
-| 分词 | HuggingFace Tokenizers (BPE) |
+| 分词 | 字符级词表(JSON) + 平台 BPE 分词器 |
 | 前端 | HTML5 + CSS3 + Vanilla JS |
-| 进度条 | tqdm |
+| CI/CD | GitCode Pipeline（`.gitcode/workflows`，E2E 回归自动化） |
 | 打包部署 | PyInstaller + Inno Setup |
 
 ---
@@ -65,7 +67,12 @@ Windows_ITPP/
 ├── trainer.py              # 兼容垫片（训练实现已迁移 trainers 包）
 ├── state.py                # 训练任务状态（内存）
 ├── cleanup.py              # 存储清理机制
+├── resource_limits.py      # 资源占用上限（默认系统一半）
 ├── requirements.txt        # Python 依赖
+├── test_templates/         # 测试页本地示例代码（image/text/diffusion/multimodal 等）
+├── .gitcode/               # GitCode CI/CD 流水线
+│   ├── workflows/ci.yml    #   编译检查 + 六类训练 E2E 回归
+│   └── scripts/            #   E2E 回归驱动脚本
 ├── architectures/          # 🧱 模型积木库（可插拔）
 │   ├── attention.py        #   注意力注册表：full / flash(默认) / linear
 │   ├── blocks.py           #   TransformerBlock / 双向编码块(ViT)
@@ -184,6 +191,8 @@ python app.py
 | GET | `/api/list_user_models` | 测试模型列表 |
 | POST | `/api/upload_test_data` | 上传测试数据 |
 | POST | `/api/run_test` | 运行测试 |
+| GET | `/api/test_template/<name>` | 本地测试示例代码（白名单） |
+| GET | `/api/architecture_options` | 积木选项（可用注意力/模型架构/分区） |
 | GET | `/api/profile/info` | 账号信息 |
 | POST | `/api/profile/update_username` | 修改用户名 |
 | POST | `/api/profile/update_password` | 修改密码 |
@@ -202,6 +211,11 @@ python app.py
 | GET | `/admin/api/bandwidth` | 带宽使用统计 |
 | POST | `/admin/api/bandwidth/default` | 设置默认带宽限制 |
 | POST | `/admin/api/bandwidth/user/<id>` | 设置用户带宽限制 |
+| GET | `/admin/api/cleanup/status` | 存储占用统计与清理配置 |
+| POST | `/admin/api/cleanup/config` | 设置自动清理保留天数 |
+| POST | `/admin/api/cleanup/run` | 手动清除模型/上传数据/日志 |
+| GET | `/admin/api/resource_limits` | 查看资源占用上限与当前用量 |
+| POST | `/admin/api/resource_limits` | 设置资源上限（默认系统一半，0=不限） |
 
 ---
 
