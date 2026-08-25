@@ -42,6 +42,11 @@ def req_json(method, path, body=None):
 
 
 req_json('POST', '/api/login', {'username': 'e2e_probe', 'password': 'probe123456'})
+# 动态获取当前用户 ID（流水线每次注册的新用户 ID 不固定，禁止硬编码目录）
+user_info = req_json('GET', '/api/user_info')
+USER_ID = user_info['user']['id']
+MODEL_DIR = f'models/{USER_ID}'
+print(f'当前用户: {user_info["user"]["username"]} (id={USER_ID})')
 
 # ---- 1) 模型列表 ----
 lst = req_json('GET', '/api/list_models')
@@ -71,8 +76,8 @@ assert dele.get('status') == 'success', dele
 lst2 = req_json('GET', '/api/list_models')
 names2 = [m['name'] for m in lst2.get('models', [])]
 assert target not in names2, '删除后仍出现在列表中'
-sidecar = 'models/3/' + target + '.json'
-assert not os.path.exists('models/3/' + target), '权重文件未删除'
+sidecar = MODEL_DIR + '/' + target + '.json'
+assert not os.path.exists(MODEL_DIR + '/' + target), '权重文件未删除'
 assert not os.path.exists(sidecar), '旁车元数据未删除'
 print(f'删除 OK: {target}')
 

@@ -1,0 +1,78 @@
+# AI_TRAINER CI/CD 流水线
+#
+# 平台说明（GitCode Pipeline，GitHub Actions 风格）：
+# - runner 镜像为 EulerOS；checkout-action 将代码检出到 repo_workspace/ 子目录，
+#   因此所有 run 步骤需先 `cd repo_workspace`。
+# - 触发：push 到 main / v1.2.1、PR 到 main、以及手动触发（workflow_dispatch）。
+#
+# 两阶段：
+#   1. compile-check —— 全量源码语法编译检查（无第三方依赖，秒级）
+#   2. e2e-pipeline  —— 真实启动服务跑端到端回归：
+#      注册登录/上传数据集 → 六类模型训练(CNN/ViT/扩散生成/扩散编辑/文本/多模态)
+#      → 每类拉取本地模板一键测试 → 标准导出包下载校验 → 删除清理
+
+name: ai-trainer-ci
+
+on:
+  push:
+    branches: ["main", "v1.2.1"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  compile-check:
+    name: 全量编译检查
+    runs-on: euleros-2.10.1
+    steps:
+      - uses: checkout-action@0.0.1
+
+      - name: Setup Python
+        uses: setup-python@0.0.1
+        with:
+          python-version: '3.11'
+
+      - name: 编译全部源码（py_compile）
+        run: |
+          cd repo_workspace
+          find . -name "*.py" -not -path "./output/*" -not -path "./.atomcode/*" -print0 \
+            | xargs -0 python -m py_compile
+          echo "[OK] py_compile all source passed"
+
+  e2e-pipeline:
+    name: 六类训练与一键测试 E2E
+    runs-on: euleros-2.10.1
+    needs: compile-check
+    env:
+      # 流水线环境收敛资源占用：单进程加载（规避受限环境的 spawn 问题）、关闭实验性编译
+      AITPP_DATALOADER_WORKERS: '0'
+      AITPP_TORCH_COMPILE: '0'
+    steps:
+      - uses: checkout-action@0.0.1
+
+      - name: Setup Python
+        uses: setup-python@0.0.1
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖（PyTorch 用 CPU 轮控制体积）
+        run: |
+          cd repo_workspace
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --no-cache-dir -r requirements.txt
+
+      - name: E2E 回归（训练 → 一键测试 → 标准导出）
+        run: |
+          cd repo_workspace
+          python .gitcode/scripts/e2e_ci_run.py
+
+      - name: 归档测试产物（日志）
+        if: always()
+        run: |
+          cd repo_workspace
+          mkdir -p ci_artifacts
+          for f in server_e2e.log e2e_run.log; do
+            [ -f "$f" ] && cp "$f" ci_artifacts/ || true
+          done
+          ls -la ci_artifacts/ || true
