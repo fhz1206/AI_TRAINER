@@ -1,0 +1,50 @@
+# 扩散图像生成模型测试模板（无条件生成：纯噪声逐步去噪）
+import torch
+import os
+import base64
+from model_io import load_model
+
+# -------------------------- 可修改参数 --------------------------
+NUM_SAMPLES = 2        # 生成图片数量
+SAMPLING_STEPS = 100   # 采样步数上限（调小更快；不超过训练时的 T）
+# -----------------------------------------------------------------
+
+# 1. 加载模型（元数据自动重建 UNet 与扩散调度）
+print("正在加载扩散生成模型...")
+model = load_model(model_path, map_location='cpu')
+model.eval()
+meta = getattr(model, '_metadata', {})
+print(f"✅ 加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+print(f"架构: {meta.get('architecture', 'Diffusion-UNet')} | 训练步数T: {model.num_timesteps}")
+
+# 采样步数上限（截断循环即可，无需改动权重）
+if SAMPLING_STEPS < model.num_timesteps:
+    model.num_timesteps = SAMPLING_STEPS
+    print(f"⚠️ 已将本次采样步数调整为 {SAMPLING_STEPS}（加速演示）")
+
+# 2. 从纯噪声采样
+print(f"开始生成 {NUM_SAMPLES} 张图像（{model.image_size}×{model.image_size}）...")
+imgs = model.sample(n=NUM_SAMPLES, device='cpu')          # 值域 [-1,1]
+
+# 3. 保存到模型同目录，并输出可复制的预览链接
+out_dir = os.path.dirname(os.path.abspath(model_path))
+paths = []
+for i, img in enumerate(imgs):
+    arr = ((img.clamp(-1, 1) + 1) / 2 * 255).byte().permute(1, 2, 0).numpy()
+    p = os.path.join(out_dir, f'sample_{i+1}.png')
+    import cv2
+    cv2.imwrite(p, cv2.cvtColor(arr, cv2.COLOR_RGB2BGR))
+    paths.append(p)
+    b64 = base64.b64encode(open(p, 'rb').read()).decode()
+    print(f"PREVIEW_IMG_{i+1}: data:image/png;base64,{b64}")
+    print(f"✅ 已保存: {p}")
+
+# 4. 生成质量自检：随机噪声一步去噪的 MSE 应明显低于未训练网络（仅供参考）
+with torch.no_grad():
+    x = torch.randn(1, 3, model.image_size, model.image_size)
+    t = torch.tensor([model.num_timesteps - 1])
+    eps_pred = model.net(x, t)
+    mse = torch.mean((eps_pred - x) ** 2).item()
+print(f"噪声预测自检 MSE: {mse:.4f}")
+print(f"损失：{mse:.4f}")
+print("=== 测试完成 ===")

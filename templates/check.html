@@ -311,8 +311,12 @@
                     <label style="margin-right: 8px;">模型框架：</label>
                     <!-- 新增head_mode框架选项 -->
                     <select id="frameworkSelect" class="form-select" onchange="onFrameworkChange()">
-                        <option value="image">CNN 图片模型</option>
-                        <option value="text">Transformer 文本模型</option>
+                        <option value="image">CNN 图片分类模型</option>
+                        <option value="image_vit">ViT 图像分类模型</option>
+                        <option value="text">Transformer 文本生成模型</option>
+                        <option value="diffusion">扩散图像生成模型</option>
+                        <option value="diffusion_edit">扩散图像编辑模型</option>
+                        <option value="multimodal">多模态图文模型</option>
                         <option value="head_mode">✋ 手部关键点检测</option>
                     </select>
                 </div>
@@ -678,21 +682,39 @@ else:
             const tip = document.getElementById('testUploadTip');
             const small = document.getElementById('testUploadSmall');
             const uploadCard = document.getElementById('testUploadCard');
-            if (currentFramework === 'image') {
-                tip.innerHTML = '<strong>📋 图片测试数据集要求</strong><br>仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片，结构同训练数据集';
-                small.textContent = '仅支持 .zip 格式，最大500MB';
-                uploadCard.style.display = 'flex'; // 显示上传卡片
-            } 
-            else if (currentFramework === 'head_mode') {
-                tip.innerHTML = '<strong>📋 手部识别要求</strong><br>请上传单张清晰的手部照片（正面、背景简洁、手部无遮挡），支持jpg/png等常见图片格式';
-                small.textContent = '仅支持 jpg/png/bmp 等图片格式，最大10MB';
-                uploadCard.style.display = 'flex'; // 显示上传卡片
-            }
-            else {
-                tip.innerHTML = '<strong>📋 文本生成测试说明</strong><br>无需上传数据集，直接输入Prompt即可测试生成效果；如需计算困惑度(PPL)可自行修改测试代码加载本地数据';
-                small.textContent = '文本生成测试无需上传数据集';
-                uploadCard.style.display = 'none'; // 隐藏上传卡片
-            }
+            const TIPS = {
+                image: {
+                    html: '<strong>📋 图片测试数据集要求</strong><br>仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片，结构同训练数据集',
+                    small: '仅支持 .zip 格式，最大500MB', show: true,
+                },
+                image_vit: {
+                    html: '<strong>📋 ViT 测试数据集要求</strong><br>与CNN相同：仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片',
+                    small: '仅支持 .zip 格式，最大500MB', show: true,
+                },
+                diffusion: {
+                    html: '<strong>🎨 扩散生成测试说明</strong><br>无需上传数据：模型从纯噪声逐步去噪生成图像，结果自动保存到模型目录并在日志中给出路径',
+                    small: '扩散生成测试无需上传数据集', show: false,
+                },
+                diffusion_edit: {
+                    html: '<strong>🖌️ 扩散编辑测试说明</strong><br>上传一张图片作为编辑源图（可选；不传则用随机噪声演示）。模型会对其修复/重绘并保存结果',
+                    small: '支持 jpg/png/bmp 等图片格式，最大10MB', show: true,
+                },
+                multimodal: {
+                    html: '<strong>🧩 多模态测试说明</strong><br>上传一张图片作为视觉输入（可选），在代码中修改 PROMPT 文本，模型将「看图续写」生成描述',
+                    small: '支持 jpg/png/bmp 等图片格式，最大10MB', show: true,
+                },
+                head_mode: {
+                    html: '<strong>📋 手部识别要求</strong><br>请上传单张清晰的手部照片（正面、背景简洁、手部无遮挡），支持jpg/png等常见图片格式',
+                    small: '仅支持 jpg/png/bmp 等图片格式，最大10MB', show: true,
+                },
+            };
+            const conf = TIPS[currentFramework] || {
+                html: '<strong>📋 文本生成测试说明</strong><br>无需上传数据集，直接输入Prompt即可测试生成效果；如需计算困惑度(PPL)可自行修改测试代码加载本地数据',
+                small: '文本生成测试无需上传数据集', show: false,
+            };
+            tip.innerHTML = conf.html;
+            small.textContent = conf.small;
+            uploadCard.style.display = conf.show ? 'flex' : 'none';
         }
 
         // 加载模型列表
@@ -708,8 +730,13 @@ else:
                     if (data.models.length === 0) {
                         select.innerHTML = '<option value="">暂无模型，请先在训练平台训练模型</option>';
                     } else {
-                        select.innerHTML = data.models.map(m => 
-                            `<option value="${m.name}">${m.name} (${m.size} | ${m.type === 'cnn' ? 'CNN' : 'Transformer'})</option>`
+                        const TYPE_LABEL = {
+                            cnn: 'CNN', vit: 'ViT', text: 'Transformer',
+                            diffusion: '扩散生成', diffusion_edit: '扩散编辑',
+                            multimodal: '多模态', hand: '手部', other: '模型'
+                        };
+                        select.innerHTML = data.models.map(m =>
+                            `<option value="${m.name}">${m.name} (${m.size} | ${TYPE_LABEL[m.type] || m.type})</option>`
                         ).join('');
                     }
                 } else {

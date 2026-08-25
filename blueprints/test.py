@@ -69,7 +69,8 @@ def _init_hand_models():
 # -------------------------- 本地测试代码模板接口 --------------------------
 _TEST_TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test_templates')
-_TEST_TEMPLATE_WHITELIST = ('image', 'text', 'head_mode')
+_TEST_TEMPLATE_WHITELIST = ('image', 'image_vit', 'text', 'diffusion',
+                            'diffusion_edit', 'multimodal', 'head_mode')
 
 
 @test_bp.route('/api/test_template/<name>')
@@ -100,14 +101,14 @@ def upload_test_data():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'status': 'error', 'message': '请选择文件'})
-    # 原框架格式校验保留
-    if framework == 'image' and not file.filename.lower().endswith('.zip'):
-        return jsonify({'status': 'error', 'message': '图片测试仅支持.zip格式'})
+    # 原框架格式校验保留（扩展：ViT 同为 zip 数据集；编辑/多模态为单图）
+    if framework in ('image', 'image_vit') and not file.filename.lower().endswith('.zip'):
+        return jsonify({'status': 'error', 'message': '图片分类测试仅支持.zip格式'})
     if framework == 'text' and not (file.filename.lower().endswith('.txt') or file.filename.lower().endswith('.zip')):
         return jsonify({'status': 'error', 'message': '文本测试仅支持.txt或.zip格式'})
-    # 新增head_mode格式校验
-    if framework == 'head_mode' and not file.filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
-        return jsonify({'status': 'error', 'message': '手部识别仅支持jpg/png等图片格式'})
+    # 单图类测试格式校验（手部/扩散编辑/多模态）
+    if framework in ('head_mode', 'diffusion_edit', 'multimodal') and not file.filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
+        return jsonify({'status': 'error', 'message': '该测试仅支持jpg/png等图片格式'})
     # 原保存路径逻辑完全保留
     test_dir = Config.TEST_DATA_FOLDER
     os.makedirs(test_dir, exist_ok=True)
@@ -211,8 +212,8 @@ def run_test():
         # 原有image/text参数校验完全保留
         if not all([framework, model_name, test_code]):
             return jsonify({'status': 'error', 'message': '参数不完整，请检查模型和测试代码是否已选择'})
-        if framework == 'image' and not test_data_path:
-            return jsonify({'status': 'error', 'message': '图片测试请先上传测试数据集'})
+        if framework in ('image', 'image_vit') and not test_data_path:
+            return jsonify({'status': 'error', 'message': '图片分类测试请先上传测试数据集'})
     # 模型校验（head_mode下跳过，使用内置模型）
     if framework != 'head_mode':
         model_path = f'models/{user_id}/{model_name}'
@@ -306,26 +307,42 @@ def run_test():
 @test_bp.route('/api/list_user_models')
 @login_required
 def list_user_models():
-    """获取当前用户模型（按框架过滤，原逻辑100%保留，新增head_mode适配）"""
+    """获取当前用户模型（按框架过滤；覆盖全部六类训练产物）"""
     user_id = session['user_id']
     framework = request.args.get('framework', 'all')
     models_dir = f'models/{user_id}'
     if not os.path.exists(models_dir):
         return jsonify({'status': 'success', 'models': []})
     models = []
+    # 前端分区 -> 模型类型
     framework_to_model_type = {
         'image': 'cnn',
+        'image_vit': 'vit',
         'text': 'text',
-        'head_mode': 'hand'
+        'diffusion': 'diffusion',
+        'diffusion_edit': 'diffusion_edit',
+        'multimodal': 'multimodal',
+        'head_mode': 'hand',
     }
     target_type = framework_to_model_type.get(framework, framework)
     for f in os.listdir(models_dir):
         if f.endswith(('.pth', '.safetensors')):
             model_type = 'other'
             f_lower = f.lower()
-            if f_lower.startswith('cnn_') or 'cnn' in f_lower:
+            # 按训练产物文件名前缀归类（与 trainers 各实现保持一致）
+            if f_lower.startswith('cnn_'):
                 model_type = 'cnn'
-            elif f_lower.startswith('text_gen_') or ('transformer' in f_lower and 'text' in f_lower):
+            elif f_lower.startswith('vit_'):
+                model_type = 'vit'
+            elif f_lower.startswith('dif_gen_'):
+                model_type = 'diffusion'
+            elif f_lower.startswith('dif_edit_'):
+                model_type = 'diffusion_edit'
+            elif f_lower.startswith('mm_stream_'):
+                model_type = 'multimodal'
+            elif f_lower.startswith('text_gen_'):
+                model_type = 'text'
+            elif 'transformer' in f_lower and 'text' in f_lower:
                 model_type = 'text'
             if framework != 'all' and model_type != target_type:
                 continue

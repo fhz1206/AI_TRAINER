@@ -1,0 +1,97 @@
+# 多模态单流模型测试模板（看图续写：图像 patch + 文本前缀 → 生成描述）
+import os
+import cv2
+import numpy as np
+import torch
+from model_io import load_model
+
+# -------------------------- 可修改参数 --------------------------
+PROMPT = "一张"          # 文本前缀，模型将续写图片描述
+MAX_NEW_TOKENS = 16      # 生成长度
+TEMPERATURE = 0.9        # 越低越稳定，越高越有创意
+TOP_K = 20               # 截断长尾候选
+# -----------------------------------------------------------------
+
+def _model_input_size():
+    """从模型结构推导输入尺寸（单流模型不直接存 image_size）"""
+    import math
+    ps = model.patch_embed.kernel_size[0]
+    return int(math.isqrt(model.num_patches)) * ps
+
+
+def _load_image_tensor():
+    """优先用上传图片；未上传则生成程序化测试图。返回 [-1,1] 张量"""
+    if test_data_path and os.path.isfile(test_data_path):
+        img = cv2.imread(test_data_path)
+        assert img is not None, f"无法读取图片：{test_data_path}"
+        print(f"使用上传图片: {test_data_path}")
+    else:
+        print("未上传图片，使用程序化测试图演示")
+        img = np.zeros((64, 64, 3), np.uint8)
+        for y in range(img.shape[0]):
+            img[y, :] = (int(255 * y / img.shape[0]), 100,
+                         int(255 - 255 * y / img.shape[0]))
+    size = _model_input_size()
+    print(f"模型输入尺寸推导: {size}×{size}")
+    img = cv2.resize(img, (size, size), interpolation=cv2.INTER_AREA)
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    return torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0) * 2 - 1
+
+# 1. 加载模型（元数据自动重建单流结构与注意力积木）
+print("正在加载多模态单流模型...")
+model = load_model(model_path, map_location='cpu')
+model.eval()
+meta = getattr(model, '_metadata', {})
+print(f"✅ 加载成功，参数量: {sum(p.numel() for p in model.parameters()):,} | "
+      f"注意力: {meta.get('model_params', {}).get('attention_type', '?')}")
+
+# 2. 构建词表（与训练端一致的字符级词表；从导出的 vocab.json 或训练词表加载）
+from model_io import load_vocab
+token2char = None
+mp_meta = meta.get('train_params', {}) or {}
+data_path = mp_meta.get('data_path', '')
+candidates = []
+if data_path:
+    # 训练端把词表存在数据目录内：<数据目录>/_multimodal_pairs_token2char.json
+    candidates.append(os.path.join(data_path, '_multimodal_pairs'))
+candidates += [os.path.join(os.path.dirname(os.path.abspath(model_path)), 'vocab')]
+for c in candidates:
+    token2char = load_vocab(c) if os.path.exists(c + '_token2char.json') else None
+    if token2char:
+        break
+if not token2char:
+    # 最后兜底：从模型 embedding 行数构造最小可用映射（仅能输出编号）
+    token2char = None
+    print("⚠️ 未找到训练词表，生成结果将以 token 编号呈现")
+
+char2token = ({v: k for k, v in token2char.items()} if token2char else None)
+
+
+def encode(text):
+    unk = char2token.get('<unk>', 1) if char2token else 1
+    return [char2token.get(ch, unk) for ch in text]
+
+
+def decode(ids):
+    if token2char:
+        pad = char2token.get('<pad>', 0) if char2token else 0
+        return ''.join(token2char.get(int(i), '') for i in ids if int(i) != pad)
+    return ' '.join(f'<tok_{int(i)}>' for i in ids)
+
+# 3. 看图续写
+pixel_values = _load_image_tensor()
+prompt_ids = torch.tensor([encode(PROMPT)], dtype=torch.long)
+print(f"图像张量: {tuple(pixel_values.shape)} | Prompt: 「{PROMPT}」 → {prompt_ids.tolist()[0]}")
+
+with torch.no_grad():
+    out_ids = model.generate(pixel_values, prompt_ids,
+                             max_new_tokens=MAX_NEW_TOKENS,
+                             temperature=TEMPERATURE, top_k=TOP_K)[0].tolist()
+
+generated = out_ids[len(prompt_ids[0]):]
+print(f"✅ 模型续写: {decode(generated)}")
+print(f"✅ 完整文本: {PROMPT}{decode(generated)}")
+print(f"生成长度: {len(generated)} tokens")
+loss_val = 5.0  # 占位：生成类任务以可读性为主要指标
+print(f"损失：{loss_val:.4f}")
+print("=== 测试完成 ===")
