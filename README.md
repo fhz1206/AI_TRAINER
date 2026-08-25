@@ -8,6 +8,13 @@
 
 > 基于 Flask + PyTorch 的深度学习训练与测试平台：覆盖 **CNN / ViT 图像分类、扩散图像生成与编辑、Decoder-only 文本生成（LLM）、多模态图文单流** 六类模型的全流程训练、管理与测试。注意力机制（full / flash / linear）像搭积木一样在 Web 端自由切换，训练产物统一导出为 **Safetensors 标准包**（权重 + config.json + 分词器文件 + LICENSE）。
 
+> [!WARNING]
+> **⚠️ 自 v1.2.1 版本开始，将不再支持旧的 `.pth` 模型文件！**
+> 平台已全面切换为 **Safetensors** 单一格式：模型权重统一为 `model.safetensors` +
+> `config.json` 旁车元数据，词表统一为 `*_token2char.json`；模型列表、下载导出与
+> 测试加载均只识别 `.safetensors`。如仍有历史 `.pth` 模型文件，请先在 v1.2.1 之前的
+> 版本中迁移或重新训练后再升级。
+
 > 用户和管理员的使用说明请查看使用说明查找表
 
 > **生态联动**：[CodeMate](https://gitcode.com/fhz1206/CodeMate) <img src="CodeMate-logo.png" width="18"/> × [CostCut-Infer](https://gitcode.com/fhz1206/CostCut-Infer) <img src="CostCut-Infer-logo.png" width="72"/>
