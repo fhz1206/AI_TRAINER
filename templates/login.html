@@ -257,13 +257,8 @@
             msg.style.display = 'block';
         }
 
-        // 防重复提交守卫：请求进行中忽略再次提交（连点/回车）
-        let _submitting = false;
-
         async function handleLogin(e) {
             e.preventDefault();
-            if (_submitting) return false;
-            _submitting = true;
             const btn = document.getElementById('loginBtn');
             btn.disabled = true;
             btn.textContent = '⏳ 登录中...';
@@ -284,13 +279,11 @@
                     setTimeout(() => { window.location.href = '/train'; }, 800);
                 } else {
                     showMessage('❌ ' + data.message, 'error');
-                    _submitting = false;
                     btn.disabled = false;
                     btn.textContent = '🚀 登录';
                 }
             } catch (err) {
                 showMessage('❌ 登录失败: ' + err.message, 'error');
-                _submitting = false;
                 btn.disabled = false;
                 btn.textContent = '🚀 登录';
             }
@@ -298,8 +291,6 @@
 
         async function handleRegister(e) {
             e.preventDefault();
-            if (_submitting) return false;
-            _submitting = true;
             const btn = document.getElementById('registerBtn');
             btn.disabled = true;
             btn.textContent = '⏳ 注册中...';
@@ -310,7 +301,6 @@
 
             if (password !== confirm) {
                 showMessage('❌ 两次密码不一致', 'error');
-                _submitting = false;
                 btn.disabled = false;
                 btn.textContent = '📝 注册';
                 return;
@@ -337,6 +327,17 @@
             btn.disabled = false;
             btn.textContent = '📝 注册';
         }
+
+        // 按 Enter 自动提交
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (document.getElementById('loginForm').style.display !== 'none') {
+                    document.getElementById('loginForm').requestSubmit();
+                } else {
+                    document.getElementById('registerForm').requestSubmit();
+                }
+            }
+        });
     </script>
 <script src="{{ url_for('static', filename='js/particles.js') }}"></script>
 </body>
