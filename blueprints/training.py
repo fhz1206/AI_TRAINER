@@ -369,6 +369,20 @@ def api_start_training():
         model_params['patch_size'] = int(data['patch_size'])
     if data.get('num_timesteps'):
         model_params['num_timesteps'] = int(data['num_timesteps'])
+    # 混合注意力积木计划（拖拽搭建的逐层序列 + 首尾特殊设置）
+    if isinstance(data.get('attention_plan'), dict):
+        plan = data['attention_plan']
+        seq = plan.get('sequence') or []
+        # 服务端二次校验：仅接受注册过的注意力类型，非法项直接剔除
+        from architectures import available_attentions
+        valid = set(available_attentions())
+        clean = {
+            'sequence': [str(a).lower() for a in seq if str(a).lower() in valid],
+            'head': str(plan.get('head') or '').lower() or None,
+            'tail': str(plan.get('tail') or '').lower() or None,
+        }
+        if clean['sequence']:
+            model_params['attention_plan'] = clean
     
     train_params = {
         'data_path': data_path,

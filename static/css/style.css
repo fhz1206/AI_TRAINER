@@ -1110,3 +1110,91 @@ body {
     opacity: 0.4;
     cursor: not-allowed;
 }
+/* ==================== 混合注意力积木搭建器 ==================== */
+.attn-builder-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.attn-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 92px;
+}
+.attn-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    width: 100%;
+    margin-left: 102px;
+}
+.attn-palette {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.attn-block {
+    padding: 7px 14px;
+    border-radius: 9px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: grab;
+    user-select: none;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.attn-block:hover { transform: translateY(-2px); border-color: var(--accent); }
+.attn-block.dragging { opacity: .55; }
+.attn-block[data-attn="full"]   { border-bottom: 3px solid #ef4444; }
+.attn-block[data-attn="flash"]  { border-bottom: 3px solid #22c55e; }
+.attn-block[data-attn="linear"] { border-bottom: 3px solid #f59e0b; }
+
+.attn-sequence {
+    flex: 1;
+    min-height: 44px;
+    min-width: 240px;
+    border: 1.5px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.03);
+    transition: border-color .15s ease;
+}
+.attn-sequence.drag-over { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.attn-seq-item { cursor: grab; position: relative; }
+.attn-seq-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 4px 8px;
+}
+.attn-seq-remove {
+    margin-left: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.attn-seq-remove:hover { color: var(--error); }
+.attn-plan-preview {
+    font-family: Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: var(--text-secondary);
+    background: rgba(15,23,42,.5);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+.attn-plan-preview .warn { color: #f59e0b; }
+#attnBuilder select {
+    padding: 6px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    outline: none;
+}

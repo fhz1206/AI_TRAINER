@@ -41,6 +41,9 @@ async function initArchitectureOptions() {
     }
     document.getElementById('llm_attn').addEventListener('change', () => updateAttentionDesc('llm'));
     updateAttentionDesc('llm');
+
+    // 混合注意力搭建器：复用同一份可用注意力清单
+    initAttnBuilder(names);
 }
 
 function updateAttentionDesc(scope) {
@@ -532,6 +535,9 @@ async function startTraining() {
         params.d_ff = parseInt(document.getElementById('d_ff_text').value);
         params.dropout = parseFloat(document.getElementById('dropout_text').value);
         params.attention_type = document.getElementById('llm_attn').value;
+        // 混合注意力搭建器：启用且已搭积木时携带逐层计划（后端校验并装配）
+        const attnPlan = collectAttentionPlan();
+        if (attnPlan) params.attention_plan = attnPlan;
         params.use_moe = document.getElementById('use_moe').checked;
         params.use_mla = document.getElementById('use_mla').checked;
         if (params.use_moe) {
@@ -839,3 +845,143 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
+// ==================== 混合注意力积木搭建器（Scratch 式拖拽） ====================
+let attnSeq = [];   // 用户搭建的层序列
+
+function attnChip(name, extraCls) {
+    const label = (ATTENTION_INFO[name] || {}).name || name;
+    return '<span class="attn-block ' + (extraCls || '') + '" data-attn="' + name + '">' + label + '</span>';
+}
+
+function initAttnBuilder(names) {
+    const palette = document.getElementById('attnPalette');
+    if (!palette) return;
+    // 调色板
+    palette.innerHTML = names.map(n => attnChip(n)).join('');
+    palette.querySelectorAll('.attn-block').forEach(el => {
+        el.addEventListener('click', () => addToAttnSequence(el.dataset.attn));
+        el.addEventListener('dragstart', e =>
+            e.dataTransfer.setData('text/plain', el.dataset.attn));
+    });
+    // 首尾特殊设置下拉（含"无"选项）
+    const opts = ['<option value="">— 无 —</option>']
+        .concat(names.map(n => '<option value="' + n + '">' +
+            ((ATTENTION_INFO[n] || {}).name || n) + '</option>')).join('');
+    document.getElementById('planHead').innerHTML = opts;
+    document.getElementById('planTail').innerHTML = opts;
+    ['planHead', 'planTail'].forEach(id =>
+        document.getElementById(id).addEventListener('change', renderAttnPreview));
+    // 序列容器拖放
+    const zone = document.getElementById('attnSequence');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        const name = e.dataTransfer.getData('text/plain');
+        if (name && (ATTENTION_INFO[name] || names.includes(name))) addToAttnSequence(name);
+    });
+    // 启用开关
+    document.getElementById('useAttnBuilder').addEventListener('change', e => {
+        document.getElementById('attnBuilder').classList.toggle('hidden', !e.target.checked);
+        if (e.target.checked) renderAttnPreview();
+    });
+    // 层数变化时刷新预览的循环/截断提示
+    document.getElementById('n_layers_text').addEventListener('input',
+        () => { if (isAttnBuilderOn()) renderAttnPreview(); });
+}
+
+function isAttnBuilderOn() {
+    const cb = document.getElementById('useAttnBuilder');
+    return cb && cb.checked;
+}
+
+function addToAttnSequence(name) {
+    attnSeq.push(name);
+    renderAttnSequence();
+}
+
+function removeAttnItem(el) {
+    const idx = parseInt(el.dataset.idx, 10);
+    attnSeq.splice(idx, 1);
+    renderAttnSequence();
+}
+
+function clearAttnSequence() {
+    attnSeq = [];
+    renderAttnSequence();
+}
+
+function renderAttnSequence() {
+    const zone = document.getElementById('attnSequence');
+    if (!attnSeq.length) {
+        zone.innerHTML = '<span class="attn-seq-empty">拖拽积木到这里，或点击上方调色板添加</span>';
+        renderAttnPreview();
+        return;
+    }
+    zone.innerHTML = '';
+    attnSeq.forEach((name, i) => {
+        const chip = attnChip(name, 'attn-seq-item');
+        const wrap = document.createElement('span');
+        wrap.innerHTML = chip +
+            '<span class="attn-seq-remove" data-idx="' + i + '" onclick="removeAttnItem(this)">✕</span>' +
+            (i < attnSeq.length - 1 ? '<span style="color:var(--text-muted)">→</span>' : '');
+        const block = wrap.querySelector('.attn-block');
+        block.setAttribute('draggable', 'true');
+        block.addEventListener('dragstart', e =>
+            e.dataTransfer.setData('application/x-attn-index', String(i)));
+        block.addEventListener('dragover', e => e.preventDefault());
+        block.addEventListener('drop', e => {
+            e.stopPropagation(); e.preventDefault();
+            const from = parseInt(e.dataTransfer.getData('application/x-attn-index'), 10);
+            if (!isNaN(from)) {
+                const moved = attnSeq.splice(from, 1)[0];
+                attnSeq.splice(i, 0, moved);
+                renderAttnSequence();
+            }
+        });
+        zone.appendChild(wrap.firstElementChild);
+        zone.appendChild(wrap.querySelector('.attn-seq-remove'));
+        if (i < attnSeq.length - 1) zone.appendChild(wrap.querySelector('span:last-child'));
+    });
+    renderAttnPreview();
+}
+
+// 预览：与后端 _resolve_attention_plan 完全同语义（循环填充/首尾覆盖/超限截断提醒）
+function renderAttnPreview() {
+    const box = document.getElementById('attnPlanPreview');
+    if (!box) return;
+    if (!attnSeq.length) {
+        box.textContent = '尚未搭建积木：将使用上方"统一注意力"。';
+        return;
+    }
+    const nLayers = Math.max(1, parseInt(
+        document.getElementById('n_layers_text').value || '6', 10));
+    const head = document.getElementById('planHead').value;
+    const tail = document.getElementById('planTail').value;
+
+    let warn = '';
+    if (attnSeq.length > nLayers) {
+        warn = '<span class="warn">⚠️ 搭建了 ' + attnSeq.length +
+               ' 块，超过模型层数 ' + nLayers + '，多余的将被自动截断</span><br>';
+    }
+    const plan = Array.from({ length: nLayers }, (_, i) => attnSeq[i % attnSeq.length]);
+    if (head) plan[0] = head;
+    if (tail) plan[nLayers - 1] = tail;
+
+    const rows = plan.map((a, i) =>
+        '第' + String(i + 1).padStart(2, ' ') + '层 → ' + a +
+        (head && i === 0 ? '  ⭐首层特殊' : '') +
+        (tail && i === nLayers - 1 ? '  🌙尾层特殊' : '')).join('<br>');
+    box.innerHTML = warn + rows;
+}
+
+// 收集搭建结果供 startTraining 使用
+function collectAttentionPlan() {
+    if (!isAttnBuilderOn() || !attnSeq.length) return null;
+    return {
+        sequence: attnSeq.slice(),
+        head: document.getElementById('planHead').value || null,
+        tail: document.getElementById('planTail').value || null,
+    };
+}

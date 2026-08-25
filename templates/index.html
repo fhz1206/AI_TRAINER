@@ -274,7 +274,7 @@
                     <input type="number" id="d_model_text" value="512" min="64">
                 </div>
                 <div class="form-group">
-                    <label for="n_layers_text">编码器层数</label>
+                    <label for="n_layers_text">解码器层数</label>
                     <input type="number" id="n_layers_text" value="6" min="1">
                 </div>
                 <div class="form-group">
@@ -294,13 +294,41 @@
             <!-- 注意力积木选择 -->
             <div class="param-grid-3">
                 <div class="form-group">
-                    <label for="llm_attn">🧱 注意力积木</label>
+                    <label for="llm_attn">🧱 统一注意力（未启用搭建器时生效）</label>
                     <select id="llm_attn"></select>
                 </div>
                 <div class="form-group">
                     <label>当前注意力说明</label>
                     <p class="tip-text" style="margin:0;" id="llm_attn_desc">—</p>
                 </div>
+            </div>
+
+            <!-- 混合注意力积木搭建器 -->
+            <div class="checkbox-group">
+                <label class="checkbox-card">
+                    <input type="checkbox" id="useAttnBuilder">
+                    <span class="check-visual">✓</span>
+                    <span class="label-text">🧩 启用混合注意力搭建器（Scratch 式拖拽）</span>
+                </label>
+            </div>
+            <div class="hidden" id="attnBuilder">
+                <div class="attn-builder-row">
+                    <span class="attn-label">🧱 积木调色板</span>
+                    <span class="attn-palette" id="attnPalette"></span>
+                    <small class="attn-hint">拖拽到下方序列（或点击添加）；序列内可拖动排序</small>
+                </div>
+                <div class="attn-builder-row">
+                    <span class="attn-label">🔗 层序列</span>
+                    <div class="attn-sequence" id="attnSequence"></div>
+                    <button type="button" class="btn-sm" onclick="clearAttnSequence()">清空</button>
+                </div>
+                <div class="attn-builder-row">
+                    <span class="attn-label">⭐ 首层特殊</span>
+                    <select id="planHead"></select>
+                    <span class="attn-label">🌙 尾层特殊</span>
+                    <select id="planTail"></select>
+                </div>
+                <div class="attn-plan-preview" id="attnPlanPreview"></div>
             </div>
 
             <div class="checkbox-group">

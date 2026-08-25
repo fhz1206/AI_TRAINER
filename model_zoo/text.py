@@ -14,13 +14,26 @@ from architectures.blocks import TransformerBlock
 
 
 class TextTransformerModel(nn.Module):
-    """Decoder-only 生成式语言模型；attention_type 支持 full/flash/linear"""
+    """
+    Decoder-only 生成式语言模型。
+
+    注意力配置两种方式：
+    - attention_type：统一类型（full/flash/linear，默认 flash）
+    - attention_plan：逐层"积木序列"，支持混合注意力。结构：
+          {
+            'sequence': ['flash', 'linear', ...],  # 用户拖拽搭建的层序列
+            'head': 'full' 或 None,                # 首层特殊设置（可选）
+            'tail': 'full' 或 None,                # 尾层特殊设置（可选）
+          }
+      展开规则：head + sequence循环重复填充 + tail；
+      若展开后层数超过 n_layers 则自动截断到 n_layers。
+    """
 
     def __init__(self, vocab_size=1000, d_model=512, n_layers=6, n_heads=8,
                  d_ff=2048, max_seq_len=128, dropout=0.1, pad_token_id=0,
                  use_moe=False, moe_experts=4, moe_top_k=2, aux_loss_weight=0.02,
                  moe_noise_epsilon=0.01, use_mla=False, mla_dim=256,
-                 attention_type='flash'):
+                 attention_type='flash', attention_plan=None):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -31,6 +44,21 @@ class TextTransformerModel(nn.Module):
         self.aux_loss_weight = aux_loss_weight
         self.attention_type = (attention_type or 'flash').lower()
 
+        # ---- 解析逐层注意力计划（混合注意力积木）----
+        self.attention_plan = self._resolve_attention_plan(
+            attention_plan, n_layers)
+        if self.attention_plan is None:
+            # 未搭建积木：回退统一 attention_type
+            self.attention_plan = [self.attention_type] * n_layers
+        if len(set(self.attention_plan)) > 1:
+            print(f"[TextTransformer] 混合注意力计划({n_layers}层): "
+                  f"{self.attention_plan}")
+        else:
+            self.attention_type = self.attention_plan[0]
+        self.attention_summary = (
+            '混合[' + '→'.join(self.attention_plan) + ']'
+            if len(set(self.attention_plan)) > 1 else self.attention_plan[0])
+
         self.token_emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_id)
         self.pos_emb = nn.Embedding(max_seq_len, d_model)
         self.dropout = nn.Dropout(dropout)
@@ -38,11 +66,11 @@ class TextTransformerModel(nn.Module):
         self.blocks = nn.ModuleList([
             TransformerBlock(
                 d_model=d_model, n_heads=n_heads, d_ff=d_ff, dropout=dropout,
-                attn_name=self.attention_type,
+                attn_name=self.attention_plan[i],
                 use_moe=use_moe, moe_experts=moe_experts,
                 moe_top_k=moe_top_k, aux_loss_weight=aux_loss_weight,
             )
-            for _ in range(n_layers)
+            for i in range(n_layers)
         ])
         self.final_norm = nn.LayerNorm(d_model)
 
@@ -54,6 +82,48 @@ class TextTransformerModel(nn.Module):
             self.lm_head.weight = self.token_emb.weight  # 权重共享
 
         self._init_weights()
+
+    @staticmethod
+    def _resolve_attention_plan(attention_plan, n_layers):
+        """
+        把用户搭建的注意力积木计划展开为长度恰为 n_layers 的类型列表。
+
+        规则：
+        - sequence 循环重复填充：层数不足时重复已搭建的序列
+        - head/tail 特殊层：非空时分别固定在首/尾
+        - 展开后超过 n_layers：自动截断并打印提醒
+        - 计划缺失/为空/非法：回退到统一 attention_type（由调用方语义处理，
+          这里返回 [attention_type] 形式由上层兜底）
+        """
+        from architectures import available_attentions
+        valid = set(available_attentions())
+
+        if not attention_plan:
+            return None
+        seq = attention_plan.get('sequence') or []
+        seq = [str(a).lower() for a in seq if str(a).lower() in valid]
+        head = str(attention_plan.get('head') or '').lower() or None
+        tail = str(attention_plan.get('tail') or '').lower() or None
+        head = head if head in valid else None
+        tail = tail if tail in valid else None
+
+        if not seq:
+            return None
+
+        # 超出模型层数：先提醒再截断（只保留前 n_layers 块）
+        if len(seq) > n_layers:
+            print(f"[TextTransformer] ⚠️ 搭建的注意力积木({len(seq)}块)超过模型层数"
+                  f"({n_layers})，已自动截断多余的积木")
+            seq = seq[:n_layers]
+
+        # 循环填充主体到 n_layers 层
+        plan = [seq[i % len(seq)] for i in range(n_layers)]
+        # 首尾特殊设置：覆盖循环体的第一格/最后一格
+        if head:
+            plan[0] = head
+        if tail:
+            plan[-1] = tail
+        return plan
 
     def _init_weights(self):
         for module in self.modules():

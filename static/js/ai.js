@@ -481,183 +481,190 @@ function initAttentionDemo() {
     }
 }
 
-// ================================= 4. 梯度下降演示逻辑 =================================
+// ================================= 4. 梯度下降演示逻辑（二次函数） =================================
 function initGradientDemo() {
-    const gradientCanvas = document.getElementById('gradientCanvas');
-    const gradientCtx = gradientCanvas.getContext('2d');
+    const canvas = document.getElementById('gradientCanvas');
+    const ctx = canvas.getContext('2d');
     const lrSlider = document.getElementById('lrSlider');
     const lrValue = document.getElementById('lrValue');
     const resetBtn = document.getElementById('resetGradientBtn');
 
+    // ---- 二次函数损失面：f(x) = 0.5·(x - x*)²，最优点 x*=0 ----
+    const QUAD_A = 0.5;
+    const X_MIN = 0;
+    const X_VIEW = 10;            // 横轴显示范围 [-10, 10]
+    const Y_VIEW_MAX = 44;        // 纵轴显示上限（f 最大约 40.5）
+
     let lr = 0.1;
-    let ball = { x: 5, y: 5 };
+    let ballX = 8;                // 参数起点
+    let steps = 0;
+    let diverged = false;
     let animationId = null;
-    let trail = [];
-    let isFirstDraw = true;
+    let trail = [];               // [{x, y}] 参数空间轨迹
+
+    const fx = x => QUAD_A * (x - X_MIN) * (x - X_MIN);
+    const dfx = x => 2 * QUAD_A * (x - X_MIN);
 
     function setupCanvas() {
-        const rect = gradientCanvas.getBoundingClientRect();
+        const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         const w = rect.width || 700;
         const h = rect.height || 400;
-        gradientCanvas.width = w * dpr;
-        gradientCanvas.height = h * dpr;
-        gradientCtx.scale(dpr, dpr);
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.scale(dpr, dpr);
         return { w, h };
     }
 
-    function drawLossContour(w, h) {
-        // 绘制等高线（先画，不清除）
-        for (let i = 0; i < 25; i++) {
-            const r = 10 + i * 12;
-            gradientCtx.beginPath();
-            gradientCtx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
-            gradientCtx.strokeStyle = `rgba(99, 102, 241, ${0.06 + i * 0.015})`;
-            gradientCtx.lineWidth = 1;
-            gradientCtx.stroke();
+    // 参数空间 -> 像素坐标
+    function toPX(x, w) {
+        const padL = 46, padR = 16;
+        return padL + ((x + X_VIEW) / (2 * X_VIEW)) * (w - padL - padR);
+    }
+    function toPY(y, h) {
+        const padT = 16, padB = 30;
+        return padT + (1 - y / Y_VIEW_MAX) * (h - padT - padB);
+    }
+
+    function drawAxesAndCurve(w, h) {
+        // 坐标轴
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(toPX(X_MIN, w), toPY(0, h));
+        ctx.lineTo(toPX(X_VIEW, w), toPY(0, h));   // x 轴
+        ctx.moveTo(toPX(-X_VIEW, w), toPY(Y_VIEW_MAX, h));
+        ctx.lineTo(toPX(-X_VIEW, w), toPY(0, h));  // y 轴
+        ctx.stroke();
+
+        // 刻度
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        for (let gx = -10; gx <= 10; gx += 5) {
+            const px = toPX(gx, w);
+            ctx.fillText(String(gx), px, toPY(0, h) + 16);
         }
+        ctx.textAlign = 'right';
+        ctx.fillText('f(x)', toPX(-X_VIEW, w) - 6, toPY(0, h) + 4);
 
-        // 最低点标记
-        const centerX = w / 2, centerY = h / 2;
-        gradientCtx.beginPath();
-        gradientCtx.arc(centerX, centerY, 6, 0, Math.PI * 2);
-        gradientCtx.fillStyle = '#22c55e';
-        gradientCtx.fill();
+        // 抛物线曲线
+        ctx.beginPath();
+        for (let px = toPX(-X_VIEW, w); px <= toPX(X_VIEW, w); px += 2) {
+            const x = -X_VIEW + ((px - toPX(-X_VIEW, w)) /
+                       (toPX(X_VIEW, w) - toPX(-X_VIEW, w))) * 2 * X_VIEW;
+            const py = toPY(fx(x), h);
+            if (px === toPX(-X_VIEW, w)) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
 
-        // 脉冲光环
-        gradientCtx.beginPath();
-        gradientCtx.arc(centerX, centerY, 10 + (Date.now() * 0.002) % 8, 0, Math.PI * 2);
-        gradientCtx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
-        gradientCtx.lineWidth = 1.5;
-        gradientCtx.stroke();
-
-        gradientCtx.fillStyle = '#94a3b8';
-        gradientCtx.font = '12px Inter, sans-serif';
-        gradientCtx.textAlign = 'center';
-        gradientCtx.fillText('★ 最优点', centerX, centerY - 15);
+        // 最优点标记（谷底）
+        const minX = toPX(X_MIN, w), minY = toPY(0, h);
+        ctx.beginPath();
+        ctx.arc(minX, minY, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#22c55e';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(minX, minY, 11 + (Date.now() * 0.002) % 8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('★ 最优点 x*=' + X_MIN, minX + 46, minY - 10);
     }
 
     function animateGradient() {
         const { w, h } = setupCanvas();
-        const centerX = w / 2;
-        const centerY = h / 2;
-        const scale = 10;
 
-        // 梯度 = -当前位置向量（指向中心）
-        const gx = -ball.x;
-        const gy = -ball.y;
-        const gradNorm = Math.sqrt(gx * gx + gy * gy);
+        // ===== 参数更新：x := x - lr·f'(x) =====
+        const grad = dfx(ballX);
+        ballX = ballX - lr * grad;
+        steps++;
 
-        // 更新位置
-        ball.x += lr * gx;
-        ball.y += lr * gy;
-
-        // 记录轨迹
-        trail.push({ x: centerX + ball.x * scale, y: centerY + ball.y * scale });
-        if (trail.length > 150) trail.shift();
-
-        // ===== 完整绘制帧 =====
-        gradientCtx.clearRect(0, 0, w, h);
-
-        // 等高线
-        drawLossContour(w, h);
-
-        // 轨迹路径
-        if (trail.length > 1) {
-            gradientCtx.beginPath();
-            gradientCtx.moveTo(trail[0].x, trail[0].y);
-            for (let i = 1; i < trail.length; i++) {
-                gradientCtx.lineTo(trail[i].x, trail[i].y);
-            }
-            gradientCtx.strokeStyle = '#ef4444';
-            gradientCtx.lineWidth = 2;
-            gradientCtx.stroke();
-
-            // 轨迹发光
-            gradientCtx.beginPath();
-            gradientCtx.moveTo(trail[0].x, trail[0].y);
-            for (let i = 1; i < trail.length; i++) {
-                gradientCtx.lineTo(trail[i].x, trail[i].y);
-            }
-            gradientCtx.strokeStyle = 'rgba(239, 68, 68, 0.15)';
-            gradientCtx.lineWidth = 6;
-            gradientCtx.stroke();
+        // 发散保护：越界即钳制并标记
+        if (!isFinite(ballX) || Math.abs(ballX) > X_VIEW) {
+            ballX = Math.max(-X_VIEW, Math.min(X_VIEW, ballX));
+            diverged = true;
         }
 
-        // 梯度向量（橙色箭头）
-        if (gradNorm > 0.01) {
-            const arrowLen = Math.min(gradNorm * scale * 0.4, 60);
-            const angle = Math.atan2(gy, gx);
-            const fromX = centerX + ball.x * scale;
-            const fromY = centerY + ball.y * scale;
-            const toX = fromX + Math.cos(angle) * arrowLen;
-            const toY = fromY + Math.sin(angle) * arrowLen;
+        trail.push({ x: ballX, y: fx(ballX) });
+        if (trail.length > 200) trail.shift();
 
-            gradientCtx.beginPath();
-            gradientCtx.moveTo(fromX, fromY);
-            gradientCtx.lineTo(toX, toY);
-            gradientCtx.strokeStyle = '#f59e0b';
-            gradientCtx.lineWidth = 3;
-            gradientCtx.stroke();
+        // ===== 绘制帧 =====
+        ctx.clearRect(0, 0, w, h);
+        drawAxesAndCurve(w, h);
 
-            // 箭头头部
-            const headLen = 10;
-            gradientCtx.beginPath();
-            gradientCtx.moveTo(toX, toY);
-            gradientCtx.lineTo(toX - headLen * Math.cos(angle - 0.4), toY - headLen * Math.sin(angle - 0.4));
-            gradientCtx.moveTo(toX, toY);
-            gradientCtx.lineTo(toX - headLen * Math.cos(angle + 0.4), toY - headLen * Math.sin(angle + 0.4));
-            gradientCtx.stroke();
+        // 轨迹点（沿曲线的衰减圆点）
+        trail.forEach((p, i) => {
+            ctx.beginPath();
+            ctx.arc(toPX(p.x, w), toPY(p.y, h), 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(239, 68, 68, ${0.15 + 0.85 * (i + 1) / trail.length})`;
+            ctx.fill();
+        });
 
-            // 梯度标签
-            gradientCtx.fillStyle = '#f59e0b';
-            gradientCtx.font = '11px Inter, sans-serif';
-            gradientCtx.textAlign = 'center';
-            gradientCtx.fillText('梯度方向 ↗', toX, toY - 12);
-        }
+        // 当前位置
+        const bx = toPX(ballX, w), by = toPY(fx(ballX), h);
+        const curGrad = dfx(ballX);
 
-        // 参数小球
-        const ballX = centerX + ball.x * scale;
-        const ballY = centerY + ball.y * scale;
+        // 切线段（展示该点的斜率方向）
+        const tanLen = 34;
+        const slopePx = -(curGrad) * (h - 46) / (Y_VIEW_MAX || 1) *
+                        ((w - 62) / (2 * X_VIEW)) * -1;   // 像素斜率（y 轴向下）
+        const dirX = 1, dirY = slopePx === 0 ? 0 : Math.sign(slopePx) *
+                        Math.min(Math.abs(slopePx), 3);
+        ctx.beginPath();
+        ctx.moveTo(bx - tanLen, by - dirY * tanLen);
+        ctx.lineTo(bx + tanLen, by + dirY * tanLen);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('切线斜率 = 梯度 ' + (curGrad >= 0 ? '+' : '') + curGrad.toFixed(2),
+                     bx, by - 26);
 
-        // 球体发光
-        gradientCtx.beginPath();
-        gradientCtx.arc(ballX, ballY, 14, 0, Math.PI * 2);
-        gradientCtx.fillStyle = 'rgba(239, 68, 68, 0.15)';
-        gradientCtx.fill();
+        // 小球（含发光）
+        ctx.beginPath();
+        ctx.arc(bx, by, 14, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(bx, by, 9, 0, Math.PI * 2);
+        ctx.fillStyle = '#ef4444';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-        // 球体
-        gradientCtx.beginPath();
-        gradientCtx.arc(ballX, ballY, 9, 0, Math.PI * 2);
-        gradientCtx.fillStyle = '#ef4444';
-        gradientCtx.fill();
-        gradientCtx.strokeStyle = 'rgba(255,255,255,0.6)';
-        gradientCtx.lineWidth = 2;
-        gradientCtx.stroke();
+        // 信息面板
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`f(x) = ${QUAD_A}(x−${X_MIN})²`, 12, 20);
+        ctx.fillText(`当前参数 x = ${ballX.toFixed(3)}`, 12, 38);
+        ctx.fillText(`损失 f(x) = ${fx(ballX).toFixed(4)}`, 12, 56);
+        ctx.fillText(`梯度 f'(x) = ${curGrad.toFixed(3)} | 学习率 = ${lr}`, 12, 74);
 
-        // 球体高光
-        gradientCtx.beginPath();
-        gradientCtx.arc(ballX - 3, ballY - 3, 3, 0, Math.PI * 2);
-        gradientCtx.fillStyle = 'rgba(255,255,255,0.3)';
-        gradientCtx.fill();
-
-        // 显示当前信息
-        gradientCtx.fillStyle = '#94a3b8';
-        gradientCtx.font = '12px Inter, sans-serif';
-        gradientCtx.textAlign = 'left';
-        gradientCtx.fillText(`当前位置: (${ball.x.toFixed(2)}, ${ball.y.toFixed(2)})`, 12, 20);
-        gradientCtx.fillText(`梯度范数: ${gradNorm.toFixed(3)}`, 12, 38);
-        gradientCtx.fillText(`学习率: ${lr}`, 12, 56);
-
-        // 继续或停止
-        if (gradNorm > 0.02 && !isNaN(ball.x) && !isNaN(ball.y)) {
-            animationId = requestAnimationFrame(animateGradient);
+        // 收敛 / 继续
+        const converged = Math.abs(curGrad) < 0.005 && !diverged;
+        if (converged) {
+            ctx.fillStyle = '#22c55e';
+            ctx.font = 'bold 14px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`✅ 已收敛到最优点！共 ${steps} 步`, w / 2, h - 36);
+        } else if (diverged) {
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 13px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('⚠️ 学习率过大导致发散（越过边界被钳制），点击重置调低学习率', w / 2, h - 36);
+            return;  // 停止动画
         } else {
-            // 到达最低点
-            gradientCtx.fillStyle = '#22c55e';
-            gradientCtx.font = 'bold 14px Inter, sans-serif';
-            gradientCtx.textAlign = 'center';
-            gradientCtx.fillText('✅ 已收敛到最优点！', w / 2, 30);
+            animationId = requestAnimationFrame(animateGradient);
         }
     }
 
@@ -673,7 +680,9 @@ function initGradientDemo() {
             cancelAnimationFrame(animationId);
             animationId = null;
         }
-        ball = { x: 5, y: 5 };
+        ballX = 8;
+        steps = 0;
+        diverged = false;
         trail = [];
         setTimeout(() => animateGradient(), 50);
     }
@@ -689,8 +698,8 @@ function initGradientDemo() {
     window.addEventListener('resize', () => {
         if (!animationId) {
             const { w, h } = setupCanvas();
-            gradientCtx.clearRect(0, 0, w, h);
-            drawLossContour(w, h);
+            ctx.clearRect(0, 0, w, h);
+            drawAxesAndCurve(w, h);
         }
     });
 
@@ -734,7 +743,7 @@ function initLossDemo() {
     const epochCountEl = document.getElementById('epochCount');
 
     let lr = 0.01, noise = 0.05;
-    let epochs = 0, maxEpochs = 200;
+    let epochs = 0, maxEpochs = 1000;
     let lossHistory = [];
     let animId = null;
 
@@ -873,9 +882,10 @@ function initLossDemo() {
         setTimeout(trainStep, 300);
     }
 
+    const fmtLr = v => (v >= 0.001 ? String(+v.toFixed(6)) : v.toExponential(0));
     lrSlider.addEventListener('input', () => {
         lr = parseFloat(lrSlider.value);
-        lrValue.textContent = lr.toFixed(3);
+        lrValue.textContent = fmtLr(lr);
     });
     noiseSlider.addEventListener('input', () => {
         noise = parseFloat(noiseSlider.value);

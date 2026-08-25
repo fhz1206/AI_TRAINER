@@ -21,8 +21,12 @@
 # 更新日志
 
 ## v1.2.x 当前版本亮点
+- **混合注意力积木搭建器**：LLM 训练页 Scratch 式拖拽"full/flash/linear"积木，
+  逐层装配注意力；层数不足自动循环已搭序列、超出自动截断并提醒，支持首尾特殊层设置
 - **模型架构积木化**：新增 ViT 图像分类、扩散图像生成/编辑、多模态图文单流；
   注意力机制 full / flash(默认) / linear 在 Web 端像搭积木一样切换；MoE 修复广播 bug
+- **AI 学习页**：新增 16+ 可视化章节（梯度下降二次函数演示、激活函数曲线、
+  卷积扫描动画、温度采样等），侧边栏导航布局
 - **标准模型导出包**：所有模型一键下载 Safetensors 标准结构
   （model.safetensors + config.json + vocab.json / merges.txt + 多模态视觉编码器权重 + LICENSE）
 - **测试页全覆盖**：七类模型（含手部检测）均可选模型 → 自动填充本地模板 → 一键运行测试
@@ -125,7 +129,7 @@ Windows_ITPP/
 
 | 分区 | 架构 | 说明 |
 |------|------|------|
-| 大语言模型 | Transformer (Decoder-only) | 注意力积木可切换 full/flash(默认)/linear，可选 MoE、MLA |
+| 大语言模型 | Transformer (Decoder-only) | 注意力积木可切换 full/flash(默认)/linear，可选 MoE、MLA；支持**拖拽搭建逐层混合注意力**（层数不足自动循环、超出自动截断提醒，可设首尾特殊层） |
 | 图像模型 | CNN | 经典卷积分类 |
 | 图像模型 | ViT | 视觉 Transformer 分类，注意力积木可切换 |
 | 图像模型 | Diffusion (DDPM) | 图像生成，噪声预测式扩散 |

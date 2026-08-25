@@ -12,6 +12,10 @@
     <!-- 导航栏（含用户信息，统一布局避免重叠） -->
     <nav>
         <div class="nav-title">🧠 AI基础学习</div>
+        <div class="nav-hero">
+            <h2>大模型与人工智能基础交互指南</h2>
+            <p>专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
+        </div>
         <ul class="nav-links">
             <li><a href="#token" class="nav-link">分词与Token</a></li>
             <li><a href="#embedding" class="nav-link">词嵌入</a></li>
@@ -46,11 +50,6 @@
 
     <main>
         <!-- Hero -->
-        <section id="hero">
-            <h1>大模型与人工智能基础交互指南</h1>
-            <p class="hero-desc">专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
-        </section>
-
         <!-- Token -->
         <section id="token">
             <h2>📝 什么是Token？</h2>
@@ -127,7 +126,7 @@
                     <div class="loss-controls">
                         <div class="control-item">
                             <label>学习率：<span id="lossLrValue">0.01</span></label>
-                            <input type="range" id="lossLrSlider" min="0.001" max="0.1" step="0.001" value="0.01">
+                            <input type="range" id="lossLrSlider" min="0.000001" max="0.1" step="0.000001" value="0.01">
                         </div>
                         <div class="control-item">
                             <label>噪声：<span id="noiseValue">0.05</span></label>
@@ -184,22 +183,20 @@
                     <div class="transformer-flow">
                         <div class="flow-step">
                             <div>📝 输入文本</div>
-                            <div class="flow-data" style="animation-delay: 0s;"></div>
                         </div>
                         <div class="flow-arrow">→</div>
                         <div class="flow-step">
                             <div>🔢 词嵌入</div>
-                            <div class="flow-data" style="animation-delay: 0.5s;"></div>
                         </div>
                         <div class="flow-arrow">→</div>
                         <div class="flow-step">
                             <div>🧠 多层注意力</div>
-                            <div class="flow-data" style="animation-delay: 1s;"></div>
                         </div>
                         <div class="flow-arrow">→</div>
                         <div class="flow-step">
                             <div>📤 输出结果</div>
-                            <div class="flow-data" style="animation-delay: 1.5s;"></div>
+                        <!-- 全局数据小球：沿整条流水线穿行 -->
+                        <div class="flow-data" id="pipelineBall"></div>
                         </div>
                     </div>
                     <p class="tip-text">💡 悬停在各模块上可查看详细功能说明</p>

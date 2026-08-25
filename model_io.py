@@ -53,7 +53,7 @@ def save_model(model, model_path):
 
 def _build_text_kwargs(mp_):
     """文本生成模型的重建参数（新旧 safetensors 共用）"""
-    return dict(
+    kwargs = dict(
         vocab_size=mp_.get('vocab_size', 1000),
         d_model=mp_.get('d_model', 256),
         n_layers=mp_.get('n_layers', 4),
@@ -71,6 +71,22 @@ def _build_text_kwargs(mp_):
         # 新字段：旧元数据缺失时默认 flash（与旧版行为最接近的融合实现）
         attention_type=mp_.get('attention_type', 'flash'),
     )
+    # 混合注意力积木计划：存在且合法时逐层装配；键过滤防脏数据
+    plan = mp_.get('attention_plan')
+    if isinstance(plan, dict) and plan.get('sequence'):
+        from architectures import available_attentions
+        valid = set(available_attentions())
+        seq = [str(a).lower() for a in (plan.get('sequence') or [])
+               if str(a).lower() in valid]
+        head = str(plan.get('head') or '').lower()
+        tail = str(plan.get('tail') or '').lower()
+        if seq:
+            kwargs['attention_plan'] = {
+                'sequence': seq,
+                'head': head if head in valid else None,
+                'tail': tail if tail in valid else None,
+            }
+    return kwargs
 
 
 def _rebuild_architecture(meta):

@@ -71,6 +71,7 @@ def train_text_model(user_id, task_id, model_params, train_params, training_task
             mla_dim=model_params.get('mla_dim', 256),
             aux_loss_weight=min(model_params.get('aux_loss_weight', 0.02), 0.05),
             attention_type=model_params.get('attention_type', 'flash'),
+            attention_plan=model_params.get('attention_plan'),
         )
         param_count = sum(p.numel() for p in model.parameters())
         print(f"[Transformer] 模型参数量: {param_count:,}")
