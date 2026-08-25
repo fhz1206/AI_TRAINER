@@ -1009,50 +1009,36 @@ footer {
     transition: width 0.35s ease;
 }
 
-/* ==================== 左侧边栏：仅标题 + 用户信息块；章节导航在主区顶部 ==================== */
+/* ==================== 布局：顶部横栏(标题+用户信息) + 左侧章节导航栏 ==================== */
 nav {
     top: 0;
     left: 0;
-    bottom: 0;
-    width: 200px;
-    height: 100vh;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
+    right: 0;
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
     gap: 1rem;
-    padding: 1.1rem 0.9rem;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    border-bottom: none;
-    overflow-y: auto;
+    padding: 0.6rem 4%;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    overflow-y: visible;
 }
-.nav-title { text-align: center; white-space: normal; }
-
-/* 用户信息块：纵向按钮组（首页/训练/测试/账号/退出） */
+.nav-title { flex-shrink: 0; }
 .nav-user-info {
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     gap: 8px;
-}
-.nav-user-info .username {
-    text-align: center;
-    font-weight: 600;
-    color: var(--text-primary);
-    padding: 6px 0;
 }
 .nav-user-info .btn-test,
 .nav-user-info .btn-logout {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 9px 12px;
+    padding: 5px 12px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: 999px;
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 0.88rem;
+    font-size: 0.84rem;
     transition: all 0.2s ease;
 }
 .nav-user-info .btn-test:hover {
@@ -1061,61 +1047,66 @@ nav {
     border-color: var(--accent);
 }
 
-main,
-footer { margin-left: 200px; }
-
-/* 章节快捷导航（主区 hero 内的胶囊链接组） */
-.chapter-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    list-style: none;
-    justify-content: center;
-    max-width: 900px;
-    margin: 18px auto 0;
-    padding: 0;
+/* 左侧章节导航栏（原主区顶部的标题/简介/章节链接） */
+.chapter-sidebar {
+    position: fixed;
+    top: 58px;
+    left: 0;
+    bottom: 0;
+    width: 248px;
+    overflow-y: auto;
+    background: rgba(15, 15, 26, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 1rem 0.9rem;
+    z-index: 900;
 }
-.chapter-links .nav-link {
-    display: inline-block;
-    padding: 5px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border-color);
-    border-radius: 999px;
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 0.82rem;
-    transition: all 0.2s ease;
+.side-hero h2 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    line-height: 1.5;
 }
-.chapter-links .nav-link:hover,
-.chapter-links .nav-link.active {
+.side-hero p {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.chapter-sidebar .chapter-links {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    max-width: none;
+    margin-top: 14px;
+}
+.chapter-sidebar .nav-link {
+    display: block;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid transparent;
+}
+.chapter-sidebar .nav-link:hover,
+.chapter-sidebar .nav-link.active {
     background: rgba(99, 102, 241, 0.16);
     color: var(--text-primary);
     border-color: var(--accent);
 }
 
+main { margin-left: 248px; margin-top: 74px; }
+footer { margin-left: 248px; }
+
 @media (max-width: 900px) {
-    nav {
+    .chapter-sidebar {
         position: relative;
+        top: auto;
         width: 100%;
         height: auto;
-        flex-direction: row;
-        align-items: center;
-        gap: 0.6rem;
-        overflow-y: visible;
-        padding: 0.6rem 4%;
-    }
-    .nav-title { flex-shrink: 0; }
-    .nav-user-info {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        margin-left: auto;
-    }
-    .nav-user-info .btn-test,
-    .nav-user-info .btn-logout {
-        padding: 5px 10px;
-        font-size: 0.8rem;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: auto;
     }
     main { margin-left: 0; margin-top: 16px; }
     footer { margin-left: 0; }

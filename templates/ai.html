@@ -24,12 +24,13 @@
             </a>
     </nav>
 
-    <main>
-        <!-- Hero：标题 + 简介 + 章节快捷导航（原侧边栏内容移回主区） -->
-        <section id="hero">
-            <h1>大模型与人工智能基础交互指南</h1>
-            <p class="hero-desc">专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
-            <ul class="chapter-links">
+    <!-- 左侧边栏：学习指南标题 + 简介 + 章节导航（原主区顶部内容） -->
+    <aside class="chapter-sidebar">
+        <div class="side-hero">
+            <h2>大模型与人工智能基础交互指南</h2>
+            <p>专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
+        </div>
+        <ul class="chapter-links">
                 <li><a href="#token" class="nav-link">分词与Token</a></li>
                 <li><a href="#embedding" class="nav-link">词嵌入</a></li>
                 <li><a href="#attention" class="nav-link">注意力机制</a></li>
@@ -47,9 +48,11 @@
                 <li><a href="#finetune" class="nav-link">微调入门</a></li>
                 <li><a href="#glossary" class="nav-link">术语速查表</a></li>
             </ul>
-        </section>
+    </aside>
 
-        <!-- Token -->
+    <main>
+        <!-- Hero：标题 + 简介 + 章节快捷导航（原侧边栏内容移回主区） -->
+                <!-- Token -->
         <section id="token">
             <h2>📝 什么是Token？</h2>
             <div class="card">
