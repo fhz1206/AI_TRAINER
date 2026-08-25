@@ -12,29 +12,6 @@
     <!-- 导航栏（含用户信息，统一布局避免重叠） -->
     <nav>
         <div class="nav-title">🧠 AI基础学习</div>
-        <div class="nav-hero">
-            <h2>大模型与人工智能基础交互指南</h2>
-            <p>专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
-        </div>
-        <ul class="nav-links">
-            <li><a href="#token" class="nav-link">分词与Token</a></li>
-            <li><a href="#embedding" class="nav-link">词嵌入</a></li>
-            <li><a href="#attention" class="nav-link">注意力机制</a></li>
-            <li><a href="#loss" class="nav-link">损失与困惑度</a></li>
-            <li><a href="#gradient" class="nav-link">梯度基础</a></li>
-            <li><a href="#transformer" class="nav-link">Transformer</a></li>
-            <li class="nav-divider"></li>
-            <li><a href="#aiml" class="nav-link">AI · ML · DL</a></li>
-            <li><a href="#nn" class="nav-link">神经网络基础</a></li>
-            <li><a href="#activation" class="nav-link">激活函数</a></li>
-            <li><a href="#cnn" class="nav-link">CNN 卷积网络</a></li>
-            <li><a href="#data" class="nav-link">数据集与过拟合</a></li>
-            <li><a href="#hyper" class="nav-link">超参数与优化器</a></li>
-            <li><a href="#metrics" class="nav-link">评价指标</a></li>
-            <li><a href="#sampling" class="nav-link">采样与文本生成</a></li>
-            <li><a href="#finetune" class="nav-link">微调入门</a></li>
-            <li><a href="#glossary" class="nav-link">术语速查表</a></li>
-        </ul>
         <div class="nav-user-info">
             <span class="username">{{ username }}</span>
             <a href="/home" class="btn-test" title="首页">🏠 首页</a>
@@ -45,11 +22,33 @@
                onclick="event.preventDefault();fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(d=>{if(d.status==='success')window.location.href='/login'}).catch(()=>window.location.href='/login')">
                 🚪 退出
             </a>
-        </div>
     </nav>
 
     <main>
-        <!-- Hero -->
+        <!-- Hero：标题 + 简介 + 章节快捷导航（原侧边栏内容移回主区） -->
+        <section id="hero">
+            <h1>大模型与人工智能基础交互指南</h1>
+            <p class="hero-desc">专为开发者定制的可视化学习页面，点击、输入、拖拽即可直观理解核心概念</p>
+            <ul class="chapter-links">
+                <li><a href="#token" class="nav-link">分词与Token</a></li>
+                <li><a href="#embedding" class="nav-link">词嵌入</a></li>
+                <li><a href="#attention" class="nav-link">注意力机制</a></li>
+                <li><a href="#loss" class="nav-link">损失与困惑度</a></li>
+                <li><a href="#gradient" class="nav-link">梯度基础</a></li>
+                <li><a href="#transformer" class="nav-link">Transformer</a></li>
+                <li><a href="#aiml" class="nav-link">AI · ML · DL</a></li>
+                <li><a href="#nn" class="nav-link">神经网络基础</a></li>
+                <li><a href="#activation" class="nav-link">激活函数</a></li>
+                <li><a href="#cnn" class="nav-link">CNN 卷积网络</a></li>
+                <li><a href="#data" class="nav-link">数据集与过拟合</a></li>
+                <li><a href="#hyper" class="nav-link">超参数与优化器</a></li>
+                <li><a href="#metrics" class="nav-link">评价指标</a></li>
+                <li><a href="#sampling" class="nav-link">采样与文本生成</a></li>
+                <li><a href="#finetune" class="nav-link">微调入门</a></li>
+                <li><a href="#glossary" class="nav-link">术语速查表</a></li>
+            </ul>
+        </section>
+
         <!-- Token -->
         <section id="token">
             <h2>📝 什么是Token？</h2>
