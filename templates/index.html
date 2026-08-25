@@ -163,16 +163,30 @@
                 <h3>图像模型参数</h3>
                 <span class="badge" style="background:var(--accent)">活跃</span>
             </div>
+            <!-- 任务选择条：与页面顶部标签同款样式，先选任务再配参数 -->
+            <div class="tabs-container" style="margin-bottom:14px;">
+                <button type="button" class="tab-btn active" data-img-task="cls" onclick="switchImageTask('cls')">
+                    <span>🏷️</span> 图像分类
+                </button>
+                <button type="button" class="tab-btn" data-img-task="gen" onclick="switchImageTask('gen')">
+                    <span>🎨</span> 图像生成
+                </button>
+                <button type="button" class="tab-btn" data-img-task="edit" onclick="switchImageTask('edit')">
+                    <span>🖌️</span> 图像编辑
+                </button>
+            </div>
+
+            <!-- 分类子架构条：仅图像分类任务下可见 -->
+            <div class="tabs-container hidden" style="margin-bottom:14px;" id="clsArchTabs">
+                <button type="button" class="tab-btn active" data-cls-arch="cnn" onclick="switchClsArch('cnn')">
+                    <span>🧱</span> CNN 卷积网络
+                </button>
+                <button type="button" class="tab-btn" data-cls-arch="vit" onclick="switchClsArch('vit')">
+                    <span>🔷</span> ViT 视觉Transformer
+                </button>
+            </div>
+
             <div class="param-grid-3">
-                <div class="form-group">
-                    <label for="image_arch">模型架构</label>
-                    <select id="image_arch">
-                        <option value="image_cnn">CNN 卷积分类</option>
-                        <option value="image_vit">ViT 视觉Transformer分类</option>
-                        <option value="image_diffusion">扩散模型 · 图像生成</option>
-                        <option value="image_edit_diffusion">扩散适配 · 图像编辑</option>
-                    </select>
-                </div>
                 <div class="form-group">
                     <label for="image_size">图片尺寸</label>
                     <input type="number" id="image_size" value="224" min="32" max="512">

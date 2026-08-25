@@ -51,28 +51,53 @@ function updateAttentionDesc(scope) {
     desc.textContent = (ATTENTION_INFO[sel.value] || {}).desc || '—';
 }
 
-// 图像架构切换：显示对应专属参数块
-function onImageArchChange() {
-    const arch = document.getElementById('image_arch').value;
-    const isCls = (arch === 'image_cnn' || arch === 'image_vit');
-    document.getElementById('cnnParams').classList.toggle('hidden', arch !== 'image_cnn');
-    document.getElementById('vitParams').classList.toggle('hidden', arch !== 'image_vit');
+// 图像分区状态：先选任务（分类/生成/编辑），分类任务下再选子架构（CNN/ViT）
+let imageTask = 'cls';
+let clsArch = 'cnn';
+
+function currentImageModelKey() {
+    if (imageTask === 'gen') return 'image_diffusion';
+    if (imageTask === 'edit') return 'image_edit_diffusion';
+    return clsArch === 'vit' ? 'image_vit' : 'image_cnn';
+}
+
+// 任务选择条：图像分类 / 图像生成 / 图像编辑（与顶部标签同款交互）
+function switchImageTask(task) {
+    imageTask = task;
+    document.querySelectorAll('[data-img-task]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.imgTask === task);
+    });
+    // 分类子架构条仅分类任务下可见
+    document.getElementById('clsArchTabs').classList.toggle('hidden', task !== 'cls');
+    syncImageTaskUI();
+}
+
+// 分类子架构条：CNN / ViT
+function switchClsArch(arch) {
+    clsArch = arch;
+    document.querySelectorAll('[data-cls-arch]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.clsArch === arch);
+    });
+    syncImageTaskUI();
+}
+
+function syncImageTaskUI() {
+    const key = currentImageModelKey();
+    const isCls = (key === 'image_cnn' || key === 'image_vit');
+    document.getElementById('cnnParams').classList.toggle('hidden', key !== 'image_cnn');
+    document.getElementById('vitParams').classList.toggle('hidden', key !== 'image_vit');
     document.getElementById('diffusionParams').classList.toggle(
-        'hidden', !(arch === 'image_diffusion' || arch === 'image_edit_diffusion'));
+        'hidden', !(key === 'image_diffusion' || key === 'image_edit_diffusion'));
     // 分类数量仅分类任务可见
     document.querySelectorAll('[data-cls-only]').forEach(el => {
         el.style.display = isCls ? '' : 'none';
     });
     // 扩散任务推荐小图尺寸
     const sizeInput = document.getElementById('image_size');
-    if (arch === 'image_diffusion' || arch === 'image_edit_diffusion') {
+    if (key === 'image_diffusion' || key === 'image_edit_diffusion') {
         if (parseInt(sizeInput.value, 10) > 128) sizeInput.value = 64;
     }
 }
-document.addEventListener('DOMContentLoaded', () => {
-    const archSel = document.getElementById('image_arch');
-    if (archSel) archSel.addEventListener('change', onImageArchChange);
-});
 
 function _normalizeSection(t) {
     // 兼容旧 localStorage 中的 'text'
@@ -116,7 +141,7 @@ function switchType(type) {
         document.getElementById('use_moe').disabled = true;
         document.getElementById('use_mla').disabled = true;
         hide('moeParams'); hide('mlaParams');
-        onImageArchChange();
+        syncImageTaskUI();
     } else {
         show('multimodalParams');
         accMetric.style.display = 'flex';
@@ -519,8 +544,8 @@ async function startTraining() {
         }
         params.image_size = 224;
     } else if (section === 'image') {
-        // 图像模型：CNN / ViT / 扩散生成 / 扩散编辑（积木式选择）
-        const arch = document.getElementById('image_arch').value;
+        // 图像模型：任务条（分类/生成/编辑）+ 分类子架构条（CNN/ViT）积木式选择
+        const arch = currentImageModelKey();
         params.model_key = arch;
         params.image_size = parseInt(document.getElementById('image_size').value);
         if (arch === 'image_cnn' || arch === 'image_vit') {
