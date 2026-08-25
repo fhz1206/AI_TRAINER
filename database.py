@@ -1,4 +1,5 @@
 """database.py — SQLite3 数据库管理（用户、文件、模型）"""
+import json
 import sqlite3
 import hashlib
 import os
@@ -91,6 +92,8 @@ def init_db():
         )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id, created_at)')
+    # 支持按时间的范围过滤（如清理/统计场景）；主列表查询走 rowid(id) 倒序，无需此索引
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_logs(created_at)')
     
     conn.commit()
     conn.close()
@@ -323,40 +326,132 @@ def admin_reset_password(user_id, new_password):
     return True, '密码已重置'
 
 
-def get_all_activity_logs(limit=200):
-    """获取所有用户的行为日志（管理员用）"""
+# 日志查询的显式列清单（避免 SELECT * 拷贝不可控的大字段）
+_LOG_COLUMNS = (
+    "a.id, a.user_id, a.activity_type, a.description, "
+    "a.detail, a.created_at"
+)
+
+
+def get_all_activity_logs_paged(page=1, page_size=100):
+    """分页获取行为日志（管理员用）：LIMIT/OFFSET 每次只取一页，
+    防止一次性把全部日志拉进内存。返回 dict 含 logs/total/page/page_size。
+    """
+    page = max(1, int(page))
+    page_size = min(max(1, int(page_size)), 500)   # 单页上限保护
+    offset = (page - 1) * page_size
     conn = get_db()
-    rows = conn.execute(
-        '''SELECT a.*, u.username FROM activity_logs a
-           JOIN users u ON a.user_id = u.id
-           ORDER BY a.created_at DESC LIMIT ?''',
-        (limit,)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    try:
+        total = conn.execute(
+            'SELECT COUNT(*) FROM activity_logs').fetchone()[0]
+        rows = conn.execute(
+            "SELECT " + _LOG_COLUMNS + ", u.username FROM activity_logs a "
+            "JOIN users u ON a.user_id = u.id "
+            "ORDER BY a.id DESC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        'logs': [dict(r) for r in rows],
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+    }
 
 
 # ==================== 行为日志操作 ====================
 
-def add_activity_log(user_id, activity_type, description, detail=''):
-    """添加一条行为日志"""
+# ==================== 日志存储上限（管理员可调；-1 = 无上限） ====================
+_LOG_LIMIT_DEFAULT = 1000
+_LOG_LIMIT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               'instance', 'log_limits.json')
+
+
+def get_log_limit():
+    """读取日志存储上限；-1 表示无上限。未配置时默认 1000 条。"""
+    try:
+        with open(_LOG_LIMIT_PATH, encoding='utf-8') as f:
+            cfg = json.load(f)
+        return int(cfg.get('max_logs', _LOG_LIMIT_DEFAULT))
+    except (OSError, ValueError):
+        return _LOG_LIMIT_DEFAULT
+
+
+def set_log_limit(max_logs):
+    """设置日志存储上限（-1=无上限，>=0 为保留的最新条数），并立即裁剪存量。
+
+    返回生效的上限值；参数非法时抛 ValueError。
+    """
+    max_logs = int(max_logs)
+    if max_logs != -1 and max_logs < 0:
+        raise ValueError('日志上限应为 -1 或非负整数')
+    os.makedirs(os.path.dirname(_LOG_LIMIT_PATH), exist_ok=True)
+    with open(_LOG_LIMIT_PATH, 'w', encoding='utf-8') as f:
+        json.dump({'max_logs': max_logs}, f, ensure_ascii=False)
+    if max_logs >= 0:
+        _trim_activity_logs(max_logs)
+    return get_log_limit()
+
+
+def _trim_activity_logs(keep):
+    """把行为日志裁剪到最新的 keep 条（按 id 主键倒序保留），返回删除行数。
+
+    利用主键有序性：找到第 keep 新的边界 id，一次范围删除其之前的所有行，
+    避免对全表做 NOT IN 集合运算。
+    """
+    if keep is None or keep < 0:
+        return 0
     conn = get_db()
-    conn.execute(
-        'INSERT INTO activity_logs (user_id, activity_type, description, detail) VALUES (?, ?, ?, ?)',
-        (user_id, activity_type, description, detail)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        if keep == 0:
+            cur = conn.execute('DELETE FROM activity_logs')
+        else:
+            cur = conn.execute(
+                'DELETE FROM activity_logs '
+                'WHERE id < (SELECT id FROM activity_logs '
+                '            ORDER BY id DESC LIMIT 1 OFFSET ?)',
+                (keep - 1,))
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
+def add_activity_log(user_id, activity_type, description, detail=''):
+    """添加一条行为日志；若配置了上限，同事务内删除最旧的日志（新增一条删一条）"""
+    conn = get_db()
+    try:
+        conn.execute(
+            'INSERT INTO activity_logs (user_id, activity_type, description, detail) VALUES (?, ?, ?, ?)',
+            (user_id, activity_type, description, detail)
+        )
+        limit = get_log_limit()
+        if limit >= 0:
+            if limit == 0:
+                conn.execute('DELETE FROM activity_logs')
+            else:
+                conn.execute(
+                    'DELETE FROM activity_logs '
+                    'WHERE id < (SELECT id FROM activity_logs '
+                    '            ORDER BY id DESC LIMIT 1 OFFSET ?)',
+                    (limit - 1,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_user_activity_logs(user_id, limit=50):
-    """获取用户的行为日志，按时间倒序"""
+    """获取用户的行为日志，最新在前（走 idx_activity_user 的 user_id 前缀过滤）"""
     conn = get_db()
-    rows = conn.execute(
-        'SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
-        (user_id, limit)
-    ).fetchall()
-    conn.close()
+    try:
+        rows = conn.execute(
+            "SELECT " + _LOG_COLUMNS + " FROM activity_logs a "
+            "WHERE a.user_id = ? ORDER BY a.id DESC LIMIT ?",
+            (user_id, limit)
+        ).fetchall()
+    finally:
+        conn.close()
     return [dict(r) for r in rows]
 
 

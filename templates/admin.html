@@ -117,12 +117,24 @@
 
         <!-- 日志查看 -->
         <div class="tab-content" id="tabLogs">
-            <div class="search-bar" style="position:relative;">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+                <span style="font-size:13px;color:var(--text-secondary);">日志存储上限（-1=无上限；新增一条自动删除最旧一条）</span>
+                <input type="number" id="logLimitInput" value="-1"
+                       style="width:90px;padding:6px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;text-align:center;">
+                <button class="btn-sm btn-primary-sm" onclick="setLogLimit()">保存</button>
+                <span id="logLimitInfo" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+            <div class="search-bar" style="position:relative;margin-bottom:12px;">
                 <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;">🔍</span>
-                <input type="text" id="logSearchInput" placeholder="搜索日志内容..." oninput="filterLogs()" style="padding-left:36px;">
+                <input type="text" id="logSearchInput" placeholder="搜索当前页日志..." oninput="filterLogs()" style="padding-left:36px;">
             </div>
             <div class="log-list" id="logList">
                 <div class="empty-state">加载中...</div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:center;align-items:center;margin-top:12px;font-size:13px;color:var(--text-secondary);">
+                <button class="btn-sm" onclick="changeLogsPage(-1)">← 上一页</button>
+                <span id="logPageInfo">-</span>
+                <button class="btn-sm" onclick="changeLogsPage(1)">下一页 →</button>
             </div>
         </div>
 
@@ -582,16 +594,65 @@
         }
 
         // 加载日志
-        async function loadLogs() {
+        let logsPage = 1;
+        const LOGS_PAGE_SIZE = 100;   // 每页固定条数，接口侧另有 500 上限保护
+
+        async function loadLogs(page) {
+            // 分页拉取：每次只取一页（LIMIT/OFFSET），避免大结果撑爆内存
             try {
-                const res = await fetch('/admin/api/logs');
+                if (typeof page === 'number') logsPage = page;
+                const res = await fetch(`/admin/api/logs?page=${logsPage}&page_size=${LOGS_PAGE_SIZE}`);
                 const data = await res.json();
                 if (data.status !== 'success') return;
                 allLogs = data.logs;
+                const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
+                document.getElementById('logPageInfo').textContent =
+                    `第 ${data.page} / ${totalPages} 页 · 共 ${data.total} 条`;
                 renderLogs(allLogs);
             } catch (e) {
                 document.getElementById('logList').innerHTML = '<div class="empty-state">❌ 加载失败</div>';
             }
+        }
+
+        function changeLogsPage(delta) {
+            const next = logsPage + delta;
+            if (next < 1) return;
+            loadLogs(next);
+        }
+
+        // ---- 日志存储上限（-1=无上限）----
+        async function loadLogLimit() {
+            try {
+                const res = await fetch('/admin/api/log_limits');
+                const data = await res.json();
+                if (data.status !== 'success') return;
+                document.getElementById('logLimitInput').value = data.max_logs;
+                document.getElementById('logLimitInfo').textContent =
+                    data.max_logs === -1 ? '当前：无上限' : `当前：保留最新 ${data.max_logs} 条`;
+            } catch (e) { console.error('load log limit failed:', e); }
+        }
+
+        async function setLogLimit() {
+            const v = parseInt(document.getElementById('logLimitInput').value, 10);
+            if (isNaN(v) || (v !== -1 && v < 0)) {
+                alert('请输入 -1（无上限）或非负整数');
+                return;
+            }
+            try {
+                const res = await fetch('/admin/api/log_limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ max_logs: v })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(v === -1 ? '已设为无上限' : `已设为保留最新 ${v} 条`);
+                    loadLogLimit();
+                    loadLogs(1);
+                } else {
+                    alert(data.message || '保存失败');
+                }
+            } catch (e) { alert('保存请求失败'); }
         }
 
         function renderLogs(logs) {
@@ -629,6 +690,7 @@
         loadDeviceStatus();
         loadCleanupStatus();
         loadResourceLimits();
+        loadLogLimit();
 
         // 资源占用上限
         async function loadResourceLimits() {

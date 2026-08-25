@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, jsonify, session, redirec
 from blueprints.utils import login_required
 from database import is_admin, get_all_users, get_user_by_id
 from database import admin_update_user_role, admin_update_user_group, admin_delete_user
-from database import admin_reset_password, get_all_activity_logs, add_activity_log
+from database import admin_reset_password, get_all_activity_logs_paged, add_activity_log
 from database import hash_password, get_db
 from state import get_queue_status, set_max_concurrent, cancel_task, training_tasks
 from state import get_bandwidth_stats, get_default_bandwidth, set_default_bandwidth, set_user_bandwidth_limit
@@ -109,9 +109,34 @@ def api_reset_password(user_id):
 @login_required
 @admin_required
 def api_get_logs():
-    """获取所有行为日志"""
-    logs = get_all_activity_logs(limit=500)
-    return jsonify({'status': 'success', 'logs': logs})
+    """分页获取行为日志（LIMIT/OFFSET 每次只取一页，防止大结果撑爆内存）"""
+    page = request.args.get('page', default=1, type=int)
+    page_size = request.args.get('page_size', default=100, type=int)
+    data = get_all_activity_logs_paged(page=page, page_size=page_size)
+    data['status'] = 'success'
+    return jsonify(data)
+
+
+@admin_bp.route('/api/log_limits', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def api_log_limits():
+    """
+    日志存储上限：GET 查看当前值；POST 设置（-1=无上限，>=0 保留最新 N 条）。
+    每新增一条日志即删除最旧一条，使存量不超过上限。
+    """
+    from database import get_log_limit, set_log_limit
+    if request.method == 'GET':
+        return jsonify({'status': 'success', 'max_logs': get_log_limit()})
+    data = request.json or {}
+    try:
+        limit = set_log_limit(data.get('max_logs'))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error',
+                        'message': '日志上限应为 -1 或非负整数'}), 400
+    add_activity_log(session['user_id'], 'admin',
+                     f'设置日志存储上限为 {limit} 条（-1=无上限）')
+    return jsonify({'status': 'success', 'max_logs': limit})
 
 
 @admin_bp.route('/api/search')

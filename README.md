@@ -31,7 +31,9 @@
   （model.safetensors + config.json + vocab.json / merges.txt + 多模态视觉编码器权重 + LICENSE）
 - **测试页全覆盖**：七类模型（含手部检测）均可选模型 → 自动填充本地模板 → 一键运行测试
 - **资源占用上限**：默认取系统一半资源（CPU 线程 / 内存），超限拒绝新训练，管理端可调
-- **存储治理**：轮转日志（单文件 5MB×5）、管理员自动/手动清理过期文件与日志
+- **存储治理**：轮转日志（单文件 5MB×5）、管理员自动/手动清理过期文件与日志；
+  行为日志存储上限可调（默认 1000 条、-1 无上限，新增一条自动删除最旧一条），
+  日志查询分页返回 + 索引优化，防止大结果撑爆内存
 - **性能优化**：移除训练人工延时、DataLoader 多进程化（受限环境自动回退单进程）
 - **CI/CD**：`.gitcode/workflows` 流水线自动执行全量编译检查与六类训练 E2E 回归
 
@@ -216,6 +218,8 @@ python app.py
 | GET | `/admin/api/cleanup/status` | 存储占用统计与清理配置 |
 | POST | `/admin/api/cleanup/config` | 设置自动清理保留天数 |
 | POST | `/admin/api/cleanup/run` | 手动清除模型/上传数据/日志 |
+| GET | `/admin/api/logs` | 分页获取行为日志（page/page_size） |
+| GET/POST | `/admin/api/log_limits` | 日志存储上限（-1=无上限，默认1000） |
 | GET | `/admin/api/resource_limits` | 查看资源占用上限与当前用量 |
 | POST | `/admin/api/resource_limits` | 设置资源上限（默认系统一半，0=不限） |
 
