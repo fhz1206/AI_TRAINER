@@ -77,7 +77,7 @@ Windows_ITPP/
 │   ├── attention.py        #   注意力注册表：full / flash(默认) / linear
 │   ├── blocks.py           #   TransformerBlock / 双向编码块(ViT)
 │   └── moe.py              #   MoE 专家混合层（修复版）
-├── models/                 # 模型实现包（按架构分文件存放）
+├── model_zoo/              # 📦 模型定义代码包（按架构分文件存放；注册表见 __init__.py）
 │   ├── vision.py           #   CNN(SimpleResNet) / ViT 图像分类
 │   ├── text.py             #   Decoder-only 文本生成（积木式注意力+MoE）
 │   ├── diffusion.py        #   扩散生成 DDPM / 扩散编辑适配

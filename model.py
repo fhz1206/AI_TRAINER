@@ -23,10 +23,10 @@ import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
-# 兼容导出：结构不变的模型直接来自 models 包；TextTransformerModel 绑定旧版完整实现，
-# 使历史 .pth 整对象检查点反序列化后仍走当年的 forward/generate（新版积木式实现在 models.text）
-from models.vision import ConvBlock, SimpleResNet, ViTModel          # noqa: F401
-from models.legacy import TextTransformerModel, MoELayer             # noqa: F401
+# 兼容导出：结构不变的模型直接来自 model_zoo 包；TextTransformerModel 绑定旧版完整实现，
+# 使历史 .pth 整对象检查点反序列化后仍走当年的 forward/generate（新版积木式实现在 model_zoo.text）
+from model_zoo.vision import ConvBlock, SimpleResNet, ViTModel          # noqa: F401
+from model_zoo.legacy import TextTransformerModel, MoELayer             # noqa: F401
 
 import warnings
 from random import randint, seed as random_seed

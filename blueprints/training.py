@@ -433,7 +433,7 @@ def api_start_training():
 def api_architecture_options():
     """积木式装配选项：可选注意力类型与模型架构（前端动态渲染下拉框）"""
     from architectures import available_attentions
-    from models import available_models
+    from model_zoo import available_models
     return jsonify({
         'status': 'success',
         'attentions': available_attentions(),

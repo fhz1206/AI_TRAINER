@@ -18,7 +18,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.optim import AdamW
 
-from models.multimodal import MultiModalSingleStream
+from model_zoo.multimodal import MultiModalSingleStream
 from model_io import save_model, save_vocab_json
 from database import save_model_record
 

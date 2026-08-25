@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.optim import AdamW
 
 from model import ImageDataset
-from models import build_model
+from model_zoo import build_model
 from model_io import save_model
 from database import save_model_record
 

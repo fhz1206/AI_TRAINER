@@ -16,7 +16,7 @@ import torch
 from torch.optim import AdamW
 
 from model import ImageDataset
-from models.diffusion import DiffusionModel, DiffusionEditModel
+from model_zoo.diffusion import DiffusionModel, DiffusionEditModel
 from model_io import save_model
 from database import save_model_record
 

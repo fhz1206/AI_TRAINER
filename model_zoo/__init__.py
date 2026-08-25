@@ -1,8 +1,8 @@
 """
-models — 模型注册表
+model_zoo — 模型注册表（模型定义代码；训练产物统一存放在 models/ 目录）
 
 按类型名构建模型（Web 端积木式选择的基础）：
-    from models import available_models, build_model
+    from model_zoo import available_models, build_model
     net = build_model('image_vit', image_size=32, num_classes=5, attention_type='flash')
 
 内置类型：

@@ -13,10 +13,10 @@ import os
 import torch
 from safetensors.torch import load_file, save_file
 
-from models.vision import SimpleResNet, ViTModel
-from models.text import TextTransformerModel
-from models.diffusion import DiffusionModel, DiffusionEditModel
-from models.multimodal import MultiModalSingleStream
+from model_zoo.vision import SimpleResNet, ViTModel
+from model_zoo.text import TextTransformerModel
+from model_zoo.diffusion import DiffusionModel, DiffusionEditModel
+from model_zoo.multimodal import MultiModalSingleStream
 
 _META_SUFFIX = '.safetensors.json'
 

@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import AdamW
 
 from model import TextDataset
-from models.text import TextTransformerModel
+from model_zoo.text import TextTransformerModel
 from model_io import save_model
 from database import save_model_record
 
