@@ -524,11 +524,15 @@ function initGradientDemo() {
     function setupCanvas() {
         const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        const w = rect.width || 700;
-        const h = rect.height || 400;
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-        ctx.scale(dpr, dpr);
+        const w = Math.round(rect.width || 700);
+        const h = Math.round(rect.height || 400);
+        const pw = w * dpr, ph = h * dpr;
+        // 同损失曲线：尺寸未变化时不重建画布位图
+        if (canvas.width !== pw || canvas.height !== ph) {
+            canvas.width = pw;
+            canvas.height = ph;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
         return { w, h };
     }
 
@@ -762,14 +766,20 @@ function initLossDemo() {
     let epochs = 0, maxEpochs = 1000;
     let lossHistory = [];
     let animId = null;
+    let runToken = 0;          // 代际令牌：重置后旧动画循环自行退出，杜绝多循环并发
+    let pendingTimer = null;
 
     function setupCanvas() {
         const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        const w = rect.width || 700, h = rect.height || 350;
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-        ctx.scale(dpr, dpr);
+        const w = Math.round(rect.width || 700), h = Math.round(rect.height || 350);
+        const pw = w * dpr, ph = h * dpr;
+        // 仅在像素尺寸真正变化时才重建画布位图（每帧重设是此前的性能热点）
+        if (canvas.width !== pw || canvas.height !== ph) {
+            canvas.width = pw;
+            canvas.height = ph;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
         return { w, h };
     }
 
@@ -876,7 +886,8 @@ function initLossDemo() {
         }
     }
 
-    function trainStep() {
+    function trainStep(token) {
+        if (token !== runToken) return;   // 已被更新的重置取代：立即退出，防双循环叠加
         if (epochs >= maxEpochs) {
             if (animId) { cancelAnimationFrame(animId); animId = null; }
             return;
@@ -884,18 +895,27 @@ function initLossDemo() {
         const prevLoss = lossHistory.length > 0 ? lossHistory[lossHistory.length - 1] : 5.0;
         lossHistory.push(simulateLossStep(prevLoss));
         epochs++;
-        const { w, h } = setupCanvas();
-        drawLossChart(w, h);
-        animId = requestAnimationFrame(trainStep);
+        // 每 5 轮（含最后一轮）才做一次全量重绘：1000 轮的重绘次数降为约 1/5
+        if (epochs % 5 === 0 || epochs >= maxEpochs) {
+            const { w, h } = setupCanvas();
+            drawLossChart(w, h);
+        }
+        animId = requestAnimationFrame(() => trainStep(token));
     }
 
     function resetTraining() {
+        runToken++;
+        if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
         if (animId) { cancelAnimationFrame(animId); animId = null; }
         epochs = 0;
         lossHistory = [5.0];
         const { w, h } = setupCanvas();
         drawLossChart(w, h);
-        setTimeout(trainStep, 300);
+        const token = runToken;
+        pendingTimer = setTimeout(() => {
+            pendingTimer = null;
+            trainStep(token);
+        }, 300);
     }
 
     const fmtLr = v => (v >= 0.001 ? String(+v.toFixed(6)) : v.toExponential(0));
