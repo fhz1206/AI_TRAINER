@@ -763,7 +763,7 @@ function initLossDemo() {
     const epochCountEl = document.getElementById('epochCount');
 
     let lr = 0.01, noise = 0.05;
-    let epochs = 0, maxEpochs = 1000;
+    let epochs = 0, maxEpochs = 500;
     let lossHistory = [5.0];   // 预置初始损失点：未开跑时坐标系与指标即有内容（epoch=0）
     let animId = null;
     let runToken = 0;          // 代际令牌：重置后旧动画循环自行退出，杜绝多循环并发
@@ -906,7 +906,7 @@ function initLossDemo() {
         lossHistory.push(simulateLossStep(prevLoss));
         epochs++;
         updateMetrics();   // 数字指标每轮都动（不随画布重绘节流）
-        // 每 5 轮（含最后一轮）才做一次全量重绘：1000 轮的重绘次数降为约 1/5
+        // 每 5 轮（含最后一轮）才做一次全量重绘：500 轮的重绘次数降为约 1/5
         if (epochs % 5 === 0 || epochs >= maxEpochs) {
             const { w, h } = setupCanvas();
             drawLossChart(w, h);
@@ -927,7 +927,7 @@ function initLossDemo() {
     }
 
     // 首次滚入视口才开始训练动画：
-    // 页面一打开就在后台跑满 1000 轮，用户滚动到此处时只剩静态成品
+    // 页面一打开就在后台跑满 500 轮，用户滚动到此处时只剩静态成品
     function scheduleStart() {
         const token = runToken;
         pendingTimer = setTimeout(() => {
