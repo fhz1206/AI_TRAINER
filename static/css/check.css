@@ -1,0 +1,273 @@
+/* check.css —— 由模板 check.html 的内联样式迁出（保持原规则顺序） */
+/* 原有样式完全保留，新增手部检测专属样式 */
+.hand-result-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #d4d4d4;
+    font-size: 13px;
+    margin-top: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: block;
+}
+.hand-result-table th, .hand-result-table td {
+    border: 1px solid #444;
+    padding: 6px 8px;
+    text-align: left;
+    min-width: 80px;
+}
+.hand-result-table th {
+    background: #2d2d2d;
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+}
+.hand-result-table tr:nth-child(even) {
+    background: rgba(255,255,255,0.02);
+}
+.hand-img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-top: 8px;
+    border: 1px solid #444;
+    max-height: 400px;
+    object-fit: contain;
+}
+/* 原有样式完全保留 */
+.check-layout {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 24px;
+    margin-top: 20px;
+}
+@media (max-width: 1200px) {
+    .check-layout {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+@media (max-width: 900px) {
+    .check-layout {
+        grid-template-columns: 1fr;
+    }
+}
+.left-col, .right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ==================== 代码编辑器（带行号+语法高亮） ==================== */
+.editor-wrapper {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1e1e1e;
+    transition: border-color 0.2s;
+}
+.editor-wrapper:focus-within {
+    border-color: var(--accent);
+}
+.editor-container {
+    display: flex;
+    min-height: 420px;
+    max-height: 60vh;
+}
+/* 行号栏 */
+.line-numbers {
+    flex-shrink: 0;
+    width: 52px;
+    padding: 16px 8px 16px 12px;
+    background: #1a1a2e;
+    color: #858585;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: right;
+    user-select: none;
+    overflow: hidden;
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+/* 语法高亮层 */
+.highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 52px;
+    right: 0;
+    bottom: 0;
+    padding: 16px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-y: auto;
+    overflow-x: hidden;
+    color: #e0e0e0;
+    pointer-events: none;
+    tab-size: 4;
+}
+/* textarea 输入层 */
+.code-editor {
+    position: relative;
+    width: 100%;
+    min-height: 420px;
+    max-height: 60vh;
+    background: transparent;
+    color: #e0e0e0;
+    border: none;
+    border-radius: 0;
+    padding: 16px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    tab-size: 4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-text-fill-color: transparent;
+    caret-color: #ffffff;
+    z-index: 1;
+}
+.code-editor::selection {
+    background: rgba(99, 102, 241, 0.4);
+    -webkit-text-fill-color: #ffffff;
+}
+
+/* ==================== 语法高亮颜色（高亮版） ==================== */
+.hl-keyword { color: #ff79c6; }       /* 关键字：亮粉 */
+.hl-builtin { color: #50fa7b; }       /* 内置函数：亮绿 */
+.hl-string  { color: #ffb86c; }       /* 字符串：亮橙 */
+.hl-comment { color: #8be9fd; font-style: italic; }  /* 注释：亮青 */
+.hl-number  { color: #bd93f9; }       /* 数字：亮紫 */
+.hl-decorator { color: #f1fa8c; }     /* 装饰器：亮黄 */
+.hl-funcall { color: #f1fa8c; }       /* 函数调用：亮黄 */
+.hl-self    { color: #8be9fd; }       /* self：亮青 */
+.hl-operator { color: #ff79c6; }      /* 运算符：亮粉 */
+.hl-punctuation { color: #e0e0e0; }   /* 括号、冒号：亮白 */
+
+.upload-tip-test {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.test-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+.btn-run {
+    padding: 10px 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.btn-run:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+.btn-run:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+.btn-secondary {
+    padding: 10px 24px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    transition: all 0.2s;
+}
+.btn-secondary:hover {
+    background: var(--border-color);
+}
+.result-area {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 420px;
+    max-height: 60vh;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.result-success {
+    color: #22c55e;
+}
+.result-error {
+    color: #ef4444;
+}
+.result-info {
+    color: #3b82f6;
+}
+.form-select {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+.form-select option {
+    background: #1a1a2e;
+    color: var(--text-primary);
+}
+.form-select:focus {
+    border-color: var(--accent);
+}
+.form-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.selected-file {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+    font-size: 14px;
+}
+.selected-file .remove-file {
+    color: #ef4444;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.selected-file .remove-file:hover {
+    background: #fecaca;
+}
+#testUploadCard .upload-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.upload-zone.drag-over {
+    border-color: var(--accent) !important;
+    background: rgba(59, 130, 246, 0.05) !important;
+    transform: scale(1.01);
+}
+.upload-zone {
+    transition: all 0.2s;
+}
