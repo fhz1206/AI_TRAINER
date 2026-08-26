@@ -663,11 +663,11 @@ else:
             applyCodeTemplate(currentFramework);
             // 切换上传提示和卡片显示状态
             updateUploadTip();
-            // head_mode下模型选择自动禁用，显示内置模型
+            // head_mode下模型选择自动禁用，显示内置模型（大小由接口动态返回）
             const modelSelect = document.getElementById('modelSelect');
             if (currentFramework === 'head_mode') {
-                modelSelect.innerHTML = '<option value="built-in_hand_model">内置MediaPipe手部关键点模型 (3.2 MB | 内置)</option>';
                 modelSelect.disabled = true; // 禁用选择，避免用户修改
+                loadModels(); // 拉取内置模型的动态信息（实际文件大小）
             } else {
                 modelSelect.disabled = false;
                 loadModels(); // 原有image/text框架加载用户模型
@@ -726,8 +726,7 @@ else:
         async function loadModels() {
             const framework = document.getElementById('frameworkSelect').value;
             const select = document.getElementById('modelSelect');
-            // 头模式不请求后端，直接使用内置模型
-            if (framework === 'head_mode') return;
+            // head_mode 也走接口：后端返回内置模型条目（含动态读取的实际文件大小）
             try {
                 const res = await fetch(`/api/list_user_models?framework=${framework}`);
                 const data = await res.json();

@@ -308,12 +308,31 @@ def run_test():
     })
 # -----------------------------------------------------------------------------------
 # -------------------------- 原有模型列表接口，完全保留逻辑，仅新增head_mode适配 --------------------------
+def _hand_model_size_str():
+    """动态读取内置手部检测模型的实际文件大小（避免硬编码随版本过期）"""
+    model_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'mediapipe_models', 'hand_landmarker.task')
+    try:
+        return f"{os.path.getsize(model_path) / 1024 / 1024:.2f} MB"
+    except OSError:
+        return '内置'
+
+
 @test_bp.route('/api/list_user_models')
 @login_required
 def list_user_models():
     """获取当前用户模型（按框架过滤；覆盖全部六类训练产物）"""
     user_id = session['user_id']
     framework = request.args.get('framework', 'all')
+
+    # head_mode：内置手部检测模型不依赖用户产物目录，必须最先处理
+    # （否则目录不存在时的提前返回会吞掉内置模型条目）
+    if framework == 'head_mode':
+        return jsonify({'status': 'success', 'models': [
+            {'name': '内置MediaPipe手部关键点模型', 'type': 'hand',
+             'path': 'built-in', 'size': _hand_model_size_str()}]})
+
     models_dir = f'models/{user_id}'
     if not os.path.exists(models_dir):
         return jsonify({'status': 'success', 'models': []})
@@ -360,8 +379,5 @@ def list_user_models():
                 'size': f"{os.path.getsize(os.path.join(models_dir, f))/1024/1024:.1f} MB"
             })
     models.sort(key=lambda x: x['name'], reverse=True)
-    # 新增head_mode返回内置模型
-    if framework == 'head_mode':
-        models = [{'name': '内置MediaPipe手部关键点模型', 'type': 'hand', 'path': 'built-in', 'size': '7.5 MB'}]
     return jsonify({'status': 'success', 'models': models})
 # -----------------------------------------------------------------------------------
