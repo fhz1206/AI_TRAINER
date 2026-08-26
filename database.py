@@ -339,11 +339,14 @@ def get_all_activity_logs_paged(page=1, page_size=100):
     """
     page = max(1, int(page))
     page_size = min(max(1, int(page_size)), 500)   # 单页上限保护
-    offset = (page - 1) * page_size
     conn = get_db()
     try:
         total = conn.execute(
             'SELECT COUNT(*) FROM activity_logs').fetchone()[0]
+        # 越界请求钳制到有效范围（如仅 1 页时请求第 2 页 → 回落第 1 页）
+        max_page = max(1, -(-total // page_size))   # ceil 除法
+        page = min(page, max_page)
+        offset = (page - 1) * page_size
         rows = conn.execute(
             "SELECT " + _LOG_COLUMNS + ", u.username FROM activity_logs a "
             "JOIN users u ON a.user_id = u.id "

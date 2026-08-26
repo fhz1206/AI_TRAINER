@@ -200,6 +200,7 @@
 
         // 加载日志
         let logsPage = 1;
+        let logsTotalPages = 1;       // 最近一次加载得到的总页数（翻页边界用）
         const LOGS_PAGE_SIZE = 100;   // 每页固定条数，接口侧另有 500 上限保护
 
         async function loadLogs(page) {
@@ -210,9 +211,14 @@
                 const data = await res.json();
                 if (data.status !== 'success') return;
                 allLogs = data.logs;
-                const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
+                logsTotalPages = Math.max(1, Math.ceil(data.total / data.page_size));
                 document.getElementById('logPageInfo').textContent =
-                    `第 ${data.page} / ${totalPages} 页 · 共 ${data.total} 条`;
+                    `第 ${data.page} / ${logsTotalPages} 页 · 共 ${data.total} 条`;
+                // 翻页按钮按可用范围禁用（单页时两键均灰）
+                const prevBtn = document.getElementById('logPrevBtn');
+                const nextBtn = document.getElementById('logNextBtn');
+                if (prevBtn) prevBtn.disabled = data.page <= 1;
+                if (nextBtn) nextBtn.disabled = data.page >= logsTotalPages;
                 renderLogs(allLogs);
             } catch (e) {
                 document.getElementById('logList').innerHTML = '<div class="empty-state">❌ 加载失败</div>';
@@ -221,7 +227,8 @@
 
         function changeLogsPage(delta) {
             const next = logsPage + delta;
-            if (next < 1) return;
+            // 双向边界：小于第一页或超出总页数一律忽略（修复单页时仍能翻到第 2 页）
+            if (next < 1 || next > logsTotalPages) return;
             loadLogs(next);
         }
 
