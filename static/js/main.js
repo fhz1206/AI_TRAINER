@@ -851,7 +851,8 @@ let attnSeq = [];   // 用户搭建的层序列
 
 function attnChip(name, extraCls) {
     const label = (ATTENTION_INFO[name] || {}).name || name;
-    return '<span class="attn-block ' + (extraCls || '') + '" data-attn="' + name + '">' + label + '</span>';
+    // draggable 必须写在标签上：HTML5 拖放仅对 draggable=true 的元素触发 dragstart
+    return '<span class="attn-block ' + (extraCls || '') + '" draggable="true" data-attn="' + name + '">' + label + '</span>';
 }
 
 function initAttnBuilder(names) {

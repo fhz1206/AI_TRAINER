@@ -21,6 +21,8 @@
 }
 
 :root {
+    /* 关键：让浏览器原生控件（select 展开列表、number 步进箭头、滚动条等）按暗色渲染 */
+    color-scheme: dark;
     --bg-primary: #0f0f1a;
     --bg-secondary: #1a1a2e;
     --bg-card: rgba(255, 255, 255, 0.05);
@@ -1197,4 +1199,33 @@ body {
     border-radius: 8px;
     color: var(--text-primary);
     outline: none;
+}
+
+
+/* ==================== 原生控件暗色兜底（按钮/下拉框/数字步进器/文字） ==================== */
+button,
+select,
+input,
+textarea {
+    font-family: inherit;
+}
+
+/* 下拉框收起态与选项文字颜色（部分浏览器不继承页面 color） */
+select option {
+    background: var(--bg-secondary, #1a1a2e);
+    color: var(--text-primary, #fff);
+}
+
+/* 数字输入框的步进箭头按主题色渲染 */
+input[type="number"] {
+    accent-color: var(--accent, #6366f1);
+}
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--accent, #6366f1);
+}
+
+/* 按钮内文字继承修正（避免被 UA 样式置为系统黑） */
+button {
+    color: inherit;
 }
