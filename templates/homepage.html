@@ -221,7 +221,7 @@
     <section class="hero">
         <div class="hero-badge" id="versionBadge">🚀 加载中...</div>
         <h1>训练 · 测试 · 学习<br>一站式 AI 模型平台</h1>
-        <p>支持 CNN 图片分类与 Transformer 文本生成模型训练，内置测试环境和 AI 基础交互学习页面，让开发者快速上手深度学习</p>
+        <p>覆盖文本生成、语言分类、图像分类/生成/编辑与多模态六大模型任务，Scratch 式拖拽积木逐层装配混合注意力，内置测试环境与 AI 基础交互学习页面</p>
         <div class="hero-actions">
             <a href="/register" class="hero-btn hero-btn-primary">🚀 开始使用</a>
             <a href="/login" class="hero-btn hero-btn-secondary">🔑 登录</a>
@@ -233,13 +233,13 @@
         <div class="features-grid">
             <div class="feature-card">
                 <div class="feature-icon">🖼️</div>
-                <h3>CNN 图片分类</h3>
-                <p>上传分类数据集，训练 SimpleResNet 卷积神经网络模型，支持自定义图片尺寸、通道数、Dropout 等超参数</p>
+                <h3>图像模型全家桶</h3>
+                <p>CNN 与 ViT 图像分类、扩散模型图像生成与编辑；DDPM 标准训练叠加 DDIM 快速采样，超参数灵活可调</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">📝</div>
-                <h3>Transformer 文本生成</h3>
-                <p>基于 Decoder-only 架构的生成式大模型训练，支持 MoE/MLA 等高级特性，内置 BPE 分词器</p>
+                <h3>大语言模型 · 生成与分类</h3>
+                <p>Decoder-only 文本生成与字符级语言分类双任务；拖拽 full/flash/linear 积木逐层装配混合注意力，支持 MoE/MLA 与 BPE 分词</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">🧪</div>
@@ -312,7 +312,7 @@
     </section>
 
     <footer>
-        <p>统一训练平台 · 基于 Flask + PyTorch 构建</p>
+        <p>统一训练平台 v<span id="footerVersion">1.2.1</span> · 基于 Flask + PyTorch 构建</p>
     </footer>
 
     <script>
@@ -367,6 +367,8 @@
                 if (data.status === 'success' && data.version) {
                     const v = data.version;
                     document.getElementById('versionBadge').textContent = `🚀 v${v.ResVersion} · 统一训练平台`;
+                    const fv = document.getElementById('footerVersion');
+                    if (fv) fv.textContent = v.ResVersion;
                 }
             })
             .catch(() => {
