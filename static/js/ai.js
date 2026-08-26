@@ -107,14 +107,30 @@ function initParticles() {
 
 // ================================= 滚动淡入动画 =================================
 function initScrollAnimation() {
+    const sections = document.querySelectorAll('section');
+    if (!('IntersectionObserver' in window)) {
+        // 环境不支持：直接全部显示（CSS 默认不隐藏，无需处理）
+        return;
+    }
+
+    // 渐进增强：由 JS 打上 reveal-init 标记后才进入隐藏态，
+    // 保证观察器失效时内容不会"永远透明"
+    sections.forEach(sec => sec.classList.add('reveal-init'));
+
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('visible');
+                observer.unobserve(entry.target);   // 已显示的不再观察
             }
         });
-    }, { threshold: 0.05, rootMargin: '0px 0px -30px 0px' });
-    document.querySelectorAll('section').forEach(sec => observer.observe(sec));
+    }, { threshold: 0, rootMargin: '0px 0px -30px 0px' });
+    sections.forEach(sec => observer.observe(sec));
+
+    // 兜底：10 秒后强制全部显示，杜绝任何场景下的"内容不可见"
+    setTimeout(() => {
+        sections.forEach(sec => sec.classList.add('visible'));
+    }, 10000);
 }
 
 // ================================= 导航栏滚动高亮 =================================

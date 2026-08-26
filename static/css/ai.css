@@ -193,12 +193,18 @@ main {
 /* ==================== Section 通用 ==================== */
 section {
     margin-bottom: 4rem;
-    opacity: 0;
-    transform: translateY(40px);
-    transition: all 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-section.visible {
+/* 滚动淡入：仅当 JS 已打上 reveal-init 标记时才隐藏（渐进增强，
+   观察器失效/无 JS 时内容始终可见，不会出现"章节永远透明"） */
+section.reveal-init {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+section.reveal-init.visible {
     opacity: 1;
     transform: translateY(0);
 }
@@ -1010,6 +1016,12 @@ footer {
 }
 
 /* ==================== 布局：顶部横栏(标题+用户信息) + 左侧章节导航栏 ==================== */
+/* 侧边栏宽度自适应：随视口在 200~252px 间伸缩，主区/页脚通过同一变量对齐 */
+:root {
+    --sidebar-w: clamp(200px, 17vw, 252px);
+    --topbar-h: 58px;
+}
+
 nav {
     top: 0;
     left: 0;
@@ -1050,18 +1062,36 @@ nav {
 /* 左侧章节导航栏（原主区顶部的标题/简介/章节链接） */
 .chapter-sidebar {
     position: fixed;
-    top: 58px;
+    top: var(--topbar-h);
     left: 0;
     bottom: 0;
-    width: 248px;
+    width: var(--sidebar-w);
     overflow-y: auto;
+    overscroll-behavior: contain;
     background: rgba(15, 15, 26, 0.65);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     padding: 1rem 0.9rem;
     z-index: 900;
+
+    /* 滚动条配色适配暗色背景 */
+    scrollbar-width: thin;                       /* Firefox */
+    scrollbar-color: rgba(129, 140, 248, 0.55) transparent;
 }
+.chapter-sidebar::-webkit-scrollbar { width: 8px; }
+.chapter-sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+.chapter-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(129, 140, 248, 0.45);
+    border-radius: 8px;
+}
+.chapter-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(129, 140, 248, 0.7);
+}
+
 .side-hero h2 {
     font-size: 1rem;
     color: var(--text-primary);
@@ -1095,10 +1125,15 @@ nav {
     border-color: var(--accent);
 }
 
-main { margin-left: 248px; margin-top: 74px; }
-footer { margin-left: 248px; }
+/* 主区对齐：仅替换左边距为侧边栏宽度，保留原有的居中与最大宽逻辑 */
+main { margin-left: var(--sidebar-w); margin-top: calc(var(--topbar-h) + 12px); }
+footer { margin-left: var(--sidebar-w); }
+
+/* 锚点跳转时标题不被固定顶栏遮挡 */
+section[id] { scroll-margin-top: calc(var(--topbar-h) + 16px); }
 
 @media (max-width: 900px) {
+    :root { --sidebar-w: 0px; }
     .chapter-sidebar {
         position: relative;
         top: auto;
