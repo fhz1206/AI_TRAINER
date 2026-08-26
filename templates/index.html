@@ -281,34 +281,34 @@
                     <label for="vit_attn">统一注意力（未启用搭建器时生效）</label>
                     <select id="vit_attn"></select>
                 </div>
-            </div>
 
-            <!-- ViT 混合注意力积木搭建器 -->
-            <div class="checkbox-group">
-                <label class="checkbox-card">
-                    <input type="checkbox" id="vitUseAttnBuilder">
-                    <span class="check-visual">✓</span>
-                    <span class="label-text">🧩 启用混合注意力搭建器（Scratch 式拖拽）</span>
-                </label>
-            </div>
-            <div class="hidden" id="vitAttnBuilder">
-                <div class="attn-builder-row">
-                    <span class="attn-label">🧱 积木调色板</span>
-                    <span class="attn-palette" id="vitAttnPalette"></span>
-                    <small class="attn-hint">拖拽到下方序列（或点击添加）；序列内可拖动排序</small>
+    <!-- ViT 混合注意力积木搭建器 -->
+                <div class="checkbox-group">
+                    <label class="checkbox-card">
+                        <input type="checkbox" id="vitUseAttnBuilder">
+                        <span class="check-visual">✓</span>
+                        <span class="label-text">🧩 启用混合注意力搭建器（Scratch 式拖拽）</span>
+                    </label>
                 </div>
-                <div class="attn-builder-row">
-                    <span class="attn-label">🔗 层序列</span>
-                    <div class="attn-sequence" id="vitAttnSequence"></div>
-                    <button type="button" class="btn-sm" data-clear>清空</button>
+                <div class="hidden" id="vitAttnBuilder">
+                    <div class="attn-builder-row">
+                        <span class="attn-label">🧱 积木调色板</span>
+                        <span class="attn-palette" id="vitAttnPalette"></span>
+                        <small class="attn-hint">拖拽到下方序列（或点击添加）；序列内可拖动排序</small>
+                    </div>
+                    <div class="attn-builder-row">
+                        <span class="attn-label">🔗 层序列</span>
+                        <div class="attn-sequence" id="vitAttnSequence"></div>
+                        <button type="button" class="btn-sm" data-clear>清空</button>
+                    </div>
+                    <div class="attn-builder-row">
+                        <span class="attn-label">⭐ 首层特殊</span>
+                        <select id="vitPlanHead"></select>
+                        <span class="attn-label">🌙 尾层特殊</span>
+                        <select id="vitPlanTail"></select>
+                    </div>
+                    <div class="attn-plan-preview" id="vitPlanPreview"></div>
                 </div>
-                <div class="attn-builder-row">
-                    <span class="attn-label">⭐ 首层特殊</span>
-                    <select id="vitPlanHead"></select>
-                    <span class="attn-label">🌙 尾层特殊</span>
-                    <select id="vitPlanTail"></select>
-                </div>
-                <div class="attn-plan-preview" id="vitPlanPreview"></div>
             </div>
 
             <!-- 扩散专属 -->
