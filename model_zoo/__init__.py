@@ -41,10 +41,12 @@ def build_model(name, **kwargs):
 
 from .vision import ConvBlock, SimpleResNet, ViTModel            # noqa: E402,F401
 from .text import TextTransformerModel                           # noqa: E402,F401
+from .text_cls import TextClassifier                            # noqa: E402,F401
 
 register_model('image_cnn')(SimpleResNet)
 register_model('image_vit')(ViTModel)
 register_model('text_generation')(TextTransformerModel)
+register_model('text_classifier')(TextClassifier)
 
 # 扩散 / 多模态为可选组件，缺失时跳过注册（不影响文本与图像分类）
 try:                                                              # noqa: E402

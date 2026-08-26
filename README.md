@@ -28,8 +28,12 @@
 # 更新日志
 
 ## v1.2.x 当前版本亮点
+- **新增语言分类模型**：字符级 Transformer 双向编码器，按类别文件夹组织数据即可训练；
+  LLM 上传数据放宽为同级散放 txt 或按文件夹组织均可
 - **混合注意力积木搭建器**：LLM 训练页 Scratch 式拖拽"full/flash/linear"积木，
-  逐层装配注意力；层数不足自动循环已搭序列、超出自动截断并提醒，支持首尾特殊层设置
+  逐层装配注意力；层数不足自动循环已搭序列、超出自动截断并提醒，支持首尾特殊层设置；
+  **ViT 同样支持**统一注意力与拖拽式逐层混合注意力
+- **扩散模型 DDIM 快速采样**：生成/编辑支持指定步数的 DDIM 确定性采样（训练页可选轻量子类型）
 - **模型架构积木化**：新增 ViT 图像分类、扩散图像生成/编辑、多模态图文单流；
   注意力机制 full / flash(默认) / linear 在 Web 端像搭积木一样切换；MoE 修复广播 bug
 - **AI 学习页**：新增 16+ 可视化章节（梯度下降二次函数演示、激活函数曲线、
@@ -92,6 +96,7 @@ Windows_ITPP/
 ├── model_zoo/              # 📦 模型定义代码包（按架构分文件存放；注册表见 __init__.py）
 │   ├── vision.py           #   CNN(SimpleResNet) / ViT 图像分类
 │   ├── text.py             #   Decoder-only 文本生成（积木式注意力+MoE）
+│   ├── text_cls.py         #   语言分类（字符级双向编码器 + CLS 池化）
 │   ├── diffusion.py        #   扩散生成 DDPM / 扩散编辑适配
 │   ├── multimodal.py       #   多模态单流（图文 Decoder-only）
 ├── trainers/               # 训练器包（按训练类型分发）
@@ -136,12 +141,17 @@ Windows_ITPP/
 
 | 分区 | 架构 | 说明 |
 |------|------|------|
-| 大语言模型 | Transformer (Decoder-only) | 注意力积木可切换 full/flash(默认)/linear，可选 MoE、MLA；支持**拖拽搭建逐层混合注意力**（层数不足自动循环、超出自动截断提醒，可设首尾特殊层） |
+| 大语言模型 | Transformer (Decoder-only) | 文本生成：注意力积木可切换 full/flash(默认)/linear，可选 MoE、MLA；支持**拖拽搭建逐层混合注意力**（层数不足自动循环、超出自动截断提醒，可设首尾特殊层）。上传数据支持同级散放 txt 或按文件夹组织 |
+| 大语言模型 | Text Classifier | **语言分类**：字符级 Transformer 双向编码器 + CLS 池化分类头，类别由顶层文件夹决定（需按类别文件夹组织数据），同样支持混合注意力 |
 | 图像模型 | CNN | 经典卷积分类 |
-| 图像模型 | ViT | 视觉 Transformer 分类，注意力积木可切换 |
-| 图像模型 | Diffusion (DDPM) | 图像生成，噪声预测式扩散 |
-| 图像模型 | Diffusion Edit Adapter | 图像编辑，条件拼接 + 退化对自监督 |
+| 图像模型 | ViT | 视觉 Transformer 分类，支持统一注意力与**拖拽式逐层混合注意力** |
+| 图像模型 | Diffusion (DDPM) | 图像生成，噪声预测式扩散；支持 **DDIM 快速采样** |
+| 图像模型 | Diffusion Edit Adapter | 图像编辑，条件拼接 + 退化对自监督；DDIM 编辑采样 |
 | 多模态 | Single-Stream Decoder | 图文 token 单流拼接，看图续写 |
+
+训练页交互：顶部主条选分区（LLM / 图像 / 多模态）→ 主条下方二级任务条选具体任务
+（LLM：文本生成/语言分类；图像：分类/生成/编辑 → 再选子架构 CNN/ViT、DDPM/DDIM、
+标准/轻量），各任务的专属参数卡与上传说明自动联动。
 
 扩展新注意力或新模型：分别用 `@register_attention('名字')` / `@register_model('名字')`
 注册即可自动出现在前端积木选项中，无需改动训练器与页面代码。

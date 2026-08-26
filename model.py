@@ -9,7 +9,7 @@ model.py — 数据管线
 import json
 import os
 from collections import OrderedDict
-from os import walk, path as os_path
+from os import walk, listdir, path as os_path
 from os.path import basename
 from threading import Lock
 from time import time as time_now
@@ -266,3 +266,83 @@ class TextDataset(Dataset):
         x = torch.tensor(chunk, dtype=torch.long)
         y = torch.roll(x, shifts=-1, dims=0)
         return x, y
+
+
+class TextClassificationDataset(Dataset):
+    """
+    文本分类数据集：顶层子文件夹名 = 类别，每个 .txt 文件为一条样本。
+    字符级词表（JSON 落盘，与 TextDataset 同风格），序列定长 padding。
+    """
+
+    def __init__(self, folder_path, vocab_size=5000, max_seq_len=64,
+                 pad_token_id=0, progress_callback=None):
+        self.folder_path = folder_path
+        self.max_seq_len = max_seq_len
+        self.vocab_size = vocab_size
+        self.pad_token_id = pad_token_id
+
+        # ---- 扫描类别文件夹 ----
+        self.classes = {}
+        samples = []   # (path, label)
+        if not os_path.isdir(folder_path):
+            raise ValueError(f"数据目录不存在：{folder_path}")
+        for entry in sorted(os.listdir(folder_path)):
+            sub = os_path.join(folder_path, entry)
+            if not os_path.isdir(sub):
+                continue
+            n_before = len(samples)
+            for root, dirs, files in walk(sub):
+                dirs.sort()
+                for f in sorted(files):
+                    if f.lower().endswith('.txt'):
+                        samples.append((os_path.join(root, f),
+                                        self.classes.setdefault(
+                                            entry, len(self.classes))))
+            if len(samples) == n_before:
+                print(f"[TextClsDataset] 警告：类别「{entry}」下没有 .txt 文件")
+        if len(self.classes) < 2:
+            raise ValueError(
+                f"至少需要 2 个类别文件夹（各含 .txt），当前仅发现 "
+                f"{len(self.classes)} 个：{list(self.classes)}")
+        print(f"[TextClsDataset] 类别: {self.classes}")
+
+        # ---- 读文本并构建词表 ----
+        texts = []
+        labels = []
+        for p, lb in samples:
+            try:
+                raw = np.fromfile(p, dtype=np.uint8)
+                t = raw.tobytes().decode('utf-8', errors='ignore').strip()
+            except OSError:
+                continue
+            if t:
+                texts.append(t)
+                labels.append(lb)
+        if not texts:
+            raise ValueError("未读到任何有效文本，请检查 .txt 内容与编码")
+
+        from collections import Counter
+        freq = Counter(ch for t in texts for ch in t)
+        special = ['<pad>', '<unk>']
+        ranked = [c for c, _ in freq.most_common(vocab_size - len(special))]
+        vocab_chars = special + ranked
+        self.char2token = {c: i for i, c in enumerate(vocab_chars)}
+        self.token2char = {i: c for c, i in self.char2token.items()}
+        from model_io import save_vocab_json
+        save_vocab_json(self.token2char, folder_path)
+        print(f"[TextClsDataset] 样本数: {len(texts)} | 词表大小: "
+              f"{len(self.char2token)}")
+
+        unk = self.char2token['<unk>']
+        self.samples = []
+        for t, lb in zip(texts, labels):
+            ids = [self.char2token.get(c, unk) for c in t[:max_seq_len]]
+            ids += [pad_token_id] * (max_seq_len - len(ids))
+            self.samples.append((ids[:max_seq_len], lb))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        ids, lb = self.samples[idx]
+        return torch.tensor(ids, dtype=torch.long), lb

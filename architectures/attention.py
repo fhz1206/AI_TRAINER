@@ -170,3 +170,43 @@ class LinearAttention(BaseSelfAttention):
             out = num / (den + eps)
 
         return self._out(_combine_heads(out)), None
+
+
+def resolve_attention_plan(attention_plan, n_layers, default='flash'):
+    """
+    把用户搭建的注意力积木计划展开为长度恰为 n_layers 的类型列表。
+
+    规则（Scratch 式搭建语义）：
+    - sequence 循环重复填充：搭建积木数不足模型层数时，重复已搭建的序列
+    - head/tail 特殊层：非空时分别固定替换首层/尾层
+    - 搭建积木数超过模型层数：自动截断并打印提醒
+    - 计划缺失/为空/全部非法：返回 [default] * n_layers
+
+    供 LLM / 文本分类 / ViT 等所有积木式模型共用。
+    """
+    valid = set(available_attentions())
+
+    if not attention_plan:
+        return [default] * n_layers
+    seq = [str(a).lower() for a in (attention_plan.get('sequence') or [])
+           if str(a).lower() in valid]
+    head = str(attention_plan.get('head') or '').lower()
+    tail = str(attention_plan.get('tail') or '').lower()
+    head = head if head in valid else None
+    tail = tail if tail in valid else None
+
+    if not seq:
+        return [default] * n_layers
+
+    # 超出模型层数：先提醒再截断（只保留前 n_layers 块）
+    if len(seq) > n_layers:
+        print(f"[AttentionPlan] ⚠️ 搭建的注意力积木({len(seq)}块)超过模型层数"
+              f"({n_layers})，已自动截断多余的积木")
+        seq = seq[:n_layers]
+
+    plan = [seq[i % len(seq)] for i in range(n_layers)]
+    if head:
+        plan[0] = head
+    if tail:
+        plan[-1] = tail
+    return plan

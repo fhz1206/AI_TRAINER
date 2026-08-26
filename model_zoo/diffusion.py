@@ -126,6 +126,36 @@ class DiffusionUNet(nn.Module):
         return self.head(u1)
 
 
+def _ddim_sample(net, x_t, alphas_cumprod, steps, cond=None, eta=0.0):
+    """
+    DDIM 确定性采样：把 [0, T) 均匀切 steps 步，用预测噪声迭代去噪。
+    cond 非 None 时为编辑模式（拼接条件图输入）。
+    eta=0 为确定性采样；返回值域 [-1,1] 的图像张量。
+    """
+    n = x_t.size(0)
+    device = x_t.device
+    T = len(alphas_cumprod)
+    step_idx = torch.linspace(T - 1, 0, steps).long()
+
+    for i, t_i in enumerate(step_idx):
+        t = torch.full((n,), int(t_i), device=device, dtype=torch.long)
+        eps = net(x_t if cond is None else torch.cat([x_t, cond], dim=1), t)
+        ac = alphas_cumprod[t_i]
+
+        # 预测 x0
+        x0 = (x_t - (1 - ac).sqrt() * eps) / ac.sqrt().clamp(min=1e-8)
+
+        # 下一个（时间上更早的）ᾱ：最后一步直接输出 x0
+        last = (i + 1 >= len(step_idx))
+        ac_next = alphas_cumprod.new_tensor(1.0) if last             else alphas_cumprod[int(step_idx[i + 1])]
+        sigma = eta * ((1 - ac_next) / (1 - ac)).sqrt()                      * (1 - ac / ac_next).clamp(min=0).sqrt()
+
+        dir_xt = (1 - ac_next - sigma ** 2).clamp(min=0).sqrt() * eps
+        noise = torch.randn_like(x_t) if (eta > 0 and not last) else 0
+        x_t = ac_next.sqrt() * x0 + dir_xt + sigma * noise
+    return x_t.clamp(-1, 1)
+
+
 def _linear_schedule(timesteps):
     betas = torch.linspace(1e-4, 0.02, timesteps)
     alphas = 1.0 - betas
@@ -164,24 +194,15 @@ class DiffusionModel(nn.Module):
         return F.mse_loss(pred, noise)
 
     @torch.no_grad()
-    def sample(self, n=1, device='cpu'):
-        """从纯噪声出发迭代去噪，返回 (n,3,H,W)，值域 [-1,1]"""
+    def sample(self, n=1, device='cpu', steps=None):
+        """从纯噪声出发迭代去噪，返回 (n,3,H,W)，值域 [-1,1]。
+        steps 为 DDIM 采样步数（默认 None=全步数；设小可加速）。"""
         self.eval()
         size = self.image_size
+        steps = int(steps or self.num_timesteps)
+        steps = max(2, min(steps, self.num_timesteps))
         x = torch.randn(n, 3, size, size, device=device)
-        for i in reversed(range(self.num_timesteps)):
-            t = torch.full((n,), i, device=device, dtype=torch.long)
-            eps = self.net(x, t)
-            alpha = 1 - self.betas[i]
-            ac = self.alphas_cumprod[i]
-            mean = (x - (1 - alpha) / (1 - ac).sqrt() * eps) / alpha.sqrt()
-            if i > 0:
-                ac_prev = self.alphas_cumprod[i - 1]
-                var = (1 - ac_prev) / (1 - ac) * self.betas[i]
-                x = mean + var.sqrt() * torch.randn_like(x)
-            else:
-                x = mean
-        return x.clamp(-1, 1)
+        return _ddim_sample(self.net, x, self.alphas_cumprod, steps)
 
 
 # ==================== 编辑适配 ====================
@@ -225,28 +246,20 @@ class DiffusionEditModel(nn.Module):
         return F.mse_loss(pred, noise)
 
     @torch.no_grad()
-    def edit(self, source, strength=0.5):
+    def edit(self, source, strength=0.5, steps=None):
         """
         SDEdit 式编辑：把源图加噪到 strength 对应强度，再条件化去噪回干净图。
         source: (n,3,H,W) 值域 [-1,1]；strength∈(0,1) 越大改动越大。
+        steps: DDIM 去噪步数（默认=加噪到的时刻数）。
         """
         self.eval()
         n = source.size(0)
         device = source.device
-        t_max = max(int(self.num_timesteps * float(strength)), 1)
+        t_max = max(int(self.num_timesteps * float(min(strength, 0.99))), 1)
         t0 = torch.full((n,), t_max - 1, device=device, dtype=torch.long)
         x = self.q_sample(source, t0, torch.randn_like(source))
 
-        for i in reversed(range(t_max)):
-            t = torch.full((n,), i, device=device, dtype=torch.long)
-            eps = self.net(torch.cat([x, source], dim=1), t)
-            alpha = 1 - self.betas[i]
-            ac = self.alphas_cumprod[i]
-            mean = (x - (1 - alpha) / (1 - ac).sqrt() * eps) / alpha.sqrt()
-            if i > 0:
-                ac_prev = self.alphas_cumprod[i - 1]
-                var = (1 - ac_prev) / (1 - ac) * self.betas[i]
-                x = mean + var.sqrt() * torch.randn_like(x)
-            else:
-                x = mean
-        return x.clamp(-1, 1)
+        steps = int(steps or t_max)
+        steps = max(2, min(steps, t_max))
+        return _ddim_sample(self.net, x, self.alphas_cumprod[:t_max], steps,
+                            cond=source)

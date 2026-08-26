@@ -314,6 +314,7 @@
                         <option value="image">CNN 图片分类模型</option>
                         <option value="image_vit">ViT 图像分类模型</option>
                         <option value="text">Transformer 文本生成模型</option>
+                        <option value="text_cls">语言分类模型</option>
                         <option value="diffusion">扩散图像生成模型</option>
                         <option value="diffusion_edit">扩散图像编辑模型</option>
                         <option value="multimodal">多模态图文模型</option>
@@ -691,6 +692,10 @@ else:
                     html: '<strong>📋 ViT 测试数据集要求</strong><br>与CNN相同：仅支持.zip格式，顶层子文件夹为类别，每个子文件夹内放测试图片',
                     small: '仅支持 .zip 格式，最大500MB', show: true,
                 },
+                text_cls: {
+                    html: '<strong>📋 语言分类测试数据集要求</strong><br>仅支持.zip格式，顶层子文件夹为类别（至少2个），每个子文件夹内放.txt样本，结构同训练数据集',
+                    small: '仅支持 .zip 格式，最大500MB', show: true,
+                },
                 diffusion: {
                     html: '<strong>🎨 扩散生成测试说明</strong><br>无需上传数据：模型从纯噪声逐步去噪生成图像，结果自动保存到模型目录并在日志中给出路径',
                     small: '扩散生成测试无需上传数据集', show: false,
@@ -732,6 +737,7 @@ else:
                     } else {
                         const TYPE_LABEL = {
                             cnn: 'CNN', vit: 'ViT', text: 'Transformer',
+                            text_cls: '语言分类',
                             diffusion: '扩散生成', diffusion_edit: '扩散编辑',
                             multimodal: '多模态', hand: '手部', other: '模型'
                         };
@@ -883,8 +889,10 @@ else:
                 return;
             }
             // image和head_mode需要上传测试数据，text不需要
-            if ((currentFramework === 'image' || currentFramework === 'head_mode') && !selectedTestDataPath) {
-                alert(currentFramework === 'image' ? '请先上传测试数据集' : '请先上传手部照片');
+            if ((currentFramework === 'image' || currentFramework === 'image_vit'
+                || currentFramework === 'text_cls' || currentFramework === 'head_mode')
+                && !selectedTestDataPath) {
+                alert(currentFramework === 'head_mode' ? '请先上传手部照片' : '请先上传测试数据集');
                 return;
             }
             // 测试代码非空校验，head_mode下自动填充默认代码（已缓存模板优先，否则用内置兜底）

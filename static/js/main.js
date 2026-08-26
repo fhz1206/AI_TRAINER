@@ -27,7 +27,7 @@ async function initArchitectureOptions() {
         }
     } catch (e) { /* 后端不可用时使用内置列表 */ }
 
-    for (const selectId of ['llm_attn', 'vit_attn', 'mm_attn']) {
+    for (const selectId of ['llm_attn', 'vit_attn', 'mm_attn', 'cls_attn']) {
         const sel = document.getElementById(selectId);
         if (!sel) continue;
         sel.innerHTML = '';
@@ -43,7 +43,8 @@ async function initArchitectureOptions() {
     updateAttentionDesc('llm');
 
     // 混合注意力搭建器：复用同一份可用注意力清单
-    initAttnBuilder(names);
+    initAttnBuilder(names, 'llm');
+    initAttnBuilder(names, 'vit');
 }
 
 function updateAttentionDesc(scope) {
@@ -70,9 +71,49 @@ function switchImageTask(task) {
     document.querySelectorAll('[data-img-task]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.imgTask === task);
     });
-    // 分类子架构条仅分类任务下可见
+    // 二级架构条随任务切换（缩进在主条下方）
     document.getElementById('clsArchTabs').classList.toggle('hidden', task !== 'cls');
+    document.getElementById('genArchTabs').classList.toggle('hidden', task !== 'gen');
+    document.getElementById('editArchTabs').classList.toggle('hidden', task !== 'edit');
     syncImageTaskUI();
+}
+
+// 生成子类型：DDPM 标准（300步）/ DDIM 轻量快速（100步）
+let genSub = 'ddpm';
+function switchGenSub(sub) {
+    genSub = sub;
+    document.querySelectorAll('[data-gen-sub]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.genSub === sub);
+    });
+    if (sub === 'ddim') document.getElementById('diff_steps').value = 100;
+    else document.getElementById('diff_steps').value = 300;
+}
+
+// 编辑子类型：标准（base=32）/ 轻量（base=16，CPU更快）
+let editSub = 'std';
+function switchEditSub(sub) {
+    editSub = sub;
+    document.querySelectorAll('[data-edit-sub]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.editSub === sub);
+    });
+    document.getElementById('diff_base').value = (sub === 'lite') ? 16 : 32;
+}
+
+// LLM 分支：文本生成(gen) / 语言分类(cls)
+let llmMode = 'gen';
+function switchLlmMode(mode) {
+    llmMode = mode;
+    document.querySelectorAll('[data-llm-task]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.llmTask === mode);
+    });
+    const isGen = mode === 'gen';
+    document.getElementById('textParams').classList.toggle('hidden', !isGen);
+    const clsCard = document.getElementById('textClsParams');
+    if (clsCard) clsCard.classList.toggle('hidden', isGen);
+    const tipG = document.getElementById('tipTextGen');
+    const tipC = document.getElementById('tipTextCls');
+    if (tipG) tipG.style.display = isGen ? 'block' : 'none';
+    if (tipC) tipC.style.display = isGen ? 'none' : 'block';
 }
 
 // 分类子架构条：CNN / ViT
@@ -120,13 +161,30 @@ function switchType(type) {
     const hide = id => document.getElementById(id).classList.add('hidden');
 
     // 上传区与说明
-    const tips = { llm: 'textUploadTip', image: 'imageUploadTip', multimodal: 'multimodalUploadTip' };
+    const tips = { llm: 'tipTextGen', image: 'imageUploadTip', multimodal: 'multimodalUploadTip' };
     Object.values(tips).forEach(id => document.getElementById(id).style.display = 'none');
     document.getElementById('imageUploadArea').style.display =
         (type === 'image' || type === 'multimodal') ? 'block' : 'none';
     document.getElementById('textUploadArea').style.display =
         type === 'llm' ? 'block' : 'none';
     document.getElementById(tips[type]).style.display = 'block';
+
+    // 图像/LLM 任务条显隐；二级条先全隐再由各自切换函数恢复
+    document.getElementById('imageTaskBar').classList.toggle('hidden', type !== 'image');
+    document.getElementById('llmTaskBar').classList.toggle('hidden', type !== 'llm');
+    ['clsArchTabs', 'genArchTabs', 'editArchTabs'].forEach(
+        id => document.getElementById(id).classList.add('hidden'));
+    if (type === 'image') switchImageTask(imageTask);
+    if (type === 'llm') switchLlmMode(llmMode);
+
+    // 图像任务条：仅图像分区显示；二级架构条全部先隐藏（由 syncImageTaskUI 决定）
+    document.getElementById('imageTaskBar').classList.toggle('hidden', type !== 'image');
+    ['clsArchTabs', 'genArchTabs', 'editArchTabs'].forEach(
+        id => document.getElementById(id).classList.add('hidden'));
+    if (type === 'image') {
+        // 恢复当前任务对应的二级架构条与参数块
+        switchImageTask(imageTask);
+    }
 
     // 模型参数卡
     hide('imageParams'); hide('textParams'); hide('multimodalParams');
@@ -525,28 +583,40 @@ async function startTraining() {
     };
 
     if (section === 'llm') {
-        // 大语言模型：Decoder-only Transformer + 积木式注意力 + MoE/MLA
-        params.model_key = 'text_generation';
-        params.vocab_size = parseInt(document.getElementById('vocab_size').value);
-        params.max_seq_len = parseInt(document.getElementById('max_seq_len').value);
-        params.d_model = parseInt(document.getElementById('d_model_text').value);
-        params.n_layers = parseInt(document.getElementById('n_layers_text').value);
-        params.n_heads = parseInt(document.getElementById('n_heads_text').value);
-        params.d_ff = parseInt(document.getElementById('d_ff_text').value);
-        params.dropout = parseFloat(document.getElementById('dropout_text').value);
-        params.attention_type = document.getElementById('llm_attn').value;
-        // 混合注意力搭建器：启用且已搭积木时携带逐层计划（后端校验并装配）
-        const attnPlan = collectAttentionPlan();
-        if (attnPlan) params.attention_plan = attnPlan;
-        params.use_moe = document.getElementById('use_moe').checked;
-        params.use_mla = document.getElementById('use_mla').checked;
-        if (params.use_moe) {
-            params.moe_experts = parseInt(document.getElementById('moe_experts').value);
-            params.moe_top_k = parseInt(document.getElementById('moe_top_k').value);
-        }
-        if (params.use_mla) {
-            params.mla_heads = parseInt(document.getElementById('mla_heads').value);
-            params.mla_dim = parseInt(document.getElementById('mla_dim').value);
+        if (llmMode === 'cls') {
+            // 语言分类：字符级 Transformer 编码器
+            params.model_key = 'text_classifier';
+            params.vocab_size = parseInt(document.getElementById('cls_vocab_size').value);
+            params.max_seq_len = parseInt(document.getElementById('cls_max_seq_len').value);
+            params.d_model = parseInt(document.getElementById('cls_d_model').value);
+            params.n_layers = parseInt(document.getElementById('cls_layers').value);
+            params.n_heads = parseInt(document.getElementById('cls_heads').value);
+            params.d_ff = parseInt(document.getElementById('cls_ff').value);
+            params.attention_type = document.getElementById('cls_attn').value;
+        } else {
+            // 文本生成：Decoder-only Transformer + 积木式注意力 + MoE/MLA
+            params.model_key = 'text_generation';
+            params.vocab_size = parseInt(document.getElementById('vocab_size').value);
+            params.max_seq_len = parseInt(document.getElementById('max_seq_len').value);
+            params.d_model = parseInt(document.getElementById('d_model_text').value);
+            params.n_layers = parseInt(document.getElementById('n_layers_text').value);
+            params.n_heads = parseInt(document.getElementById('n_heads_text').value);
+            params.d_ff = parseInt(document.getElementById('d_ff_text').value);
+            params.dropout = parseFloat(document.getElementById('dropout_text').value);
+            params.attention_type = document.getElementById('llm_attn').value;
+            // 混合注意力搭建器：启用且已搭积木时携带逐层计划（后端校验并装配）
+            const attnPlan = collectAttentionPlan('llm');
+            if (attnPlan) params.attention_plan = attnPlan;
+            params.use_moe = document.getElementById('use_moe').checked;
+            params.use_mla = document.getElementById('use_mla').checked;
+            if (params.use_moe) {
+                params.moe_experts = parseInt(document.getElementById('moe_experts').value);
+                params.moe_top_k = parseInt(document.getElementById('moe_top_k').value);
+            }
+            if (params.use_mla) {
+                params.mla_heads = parseInt(document.getElementById('mla_heads').value);
+                params.mla_dim = parseInt(document.getElementById('mla_dim').value);
+            }
         }
         params.image_size = 224;
     } else if (section === 'image') {
@@ -567,6 +637,9 @@ async function startTraining() {
             params.n_heads = parseInt(document.getElementById('vit_heads').value);
             params.d_ff = parseInt(document.getElementById('vit_ff').value);
             params.attention_type = document.getElementById('vit_attn').value;
+            // ViT 混合注意力搭建器结果（未启用/未搭建时为 null）
+            const vPlan = collectAttentionPlan('vit');
+            if (vPlan) params.attention_plan = vPlan;
         }
         if (arch === 'image_diffusion' || arch === 'image_edit_diffusion') {
             params.base_channels = parseInt(document.getElementById('diff_base').value);
@@ -846,143 +919,191 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-// ==================== 混合注意力积木搭建器（Scratch 式拖拽） ====================
-let attnSeq = [];   // 用户搭建的层序列
+// ==================== 混合注意力积木搭建器（Scratch 式拖拽，多实例） ====================
+// scope: 'llm'（文本生成）/ 'vit'（图像分类），各持独立序列状态与 DOM 元素组
+const ATTN_BUILDER_SCOPES = {};   // scope -> { seq: [...], names: [...] }
+
+function attnScopeIds(scope) {
+    const p = scope === 'llm' ? '' : scope;
+    return {
+        toggle:   p ? p + 'UseAttnBuilder' : 'useAttnBuilder',
+        box:      p ? p + 'AttnBuilder'    : 'attnBuilder',
+        palette:  p ? p + 'AttnPalette'    : 'attnPalette',
+        sequence: p ? p + 'AttnSequence'   : 'attnSequence',
+        head:     p ? p + 'PlanHead'       : 'planHead',
+        tail:     p ? p + 'PlanTail'       : 'planTail',
+        preview:  p ? p + 'PlanPreview'    : 'attnPlanPreview',
+        layers:   scope === 'llm' ? 'n_layers_text'
+                  : scope === 'vit' ? 'vit_layers' : null,
+    };
+}
 
 function attnChip(name, extraCls) {
     const label = (ATTENTION_INFO[name] || {}).name || name;
     // draggable 必须写在标签上：HTML5 拖放仅对 draggable=true 的元素触发 dragstart
-    return '<span class="attn-block ' + (extraCls || '') + '" draggable="true" data-attn="' + name + '">' + label + '</span>';
+    return '<span class="attn-block ' + (extraCls || '') +
+           '" draggable="true" data-attn="' + name + '">' + label + '</span>';
 }
 
-function initAttnBuilder(names) {
-    const palette = document.getElementById('attnPalette');
+function initAttnBuilder(names, scope) {
+    const ids = attnScopeIds(scope);
+    const palette = document.getElementById(ids.palette);
     if (!palette) return;
-    // 调色板
+    ATTN_BUILDER_SCOPES[scope] = { seq: [], names: names.slice() };
+
+    // 调色板：点击添加 / 拖入序列
     palette.innerHTML = names.map(n => attnChip(n)).join('');
     palette.querySelectorAll('.attn-block').forEach(el => {
-        el.addEventListener('click', () => addToAttnSequence(el.dataset.attn));
+        el.addEventListener('click', () => addToAttnSequence(scope, el.dataset.attn));
         el.addEventListener('dragstart', e =>
             e.dataTransfer.setData('text/plain', el.dataset.attn));
     });
-    // 首尾特殊设置下拉（含"无"选项）
+
+    // 首尾特殊设置下拉（含"无"）
     const opts = ['<option value="">— 无 —</option>']
         .concat(names.map(n => '<option value="' + n + '">' +
             ((ATTENTION_INFO[n] || {}).name || n) + '</option>')).join('');
-    document.getElementById('planHead').innerHTML = opts;
-    document.getElementById('planTail').innerHTML = opts;
-    ['planHead', 'planTail'].forEach(id =>
-        document.getElementById(id).addEventListener('change', renderAttnPreview));
+    const headSel = document.getElementById(ids.head);
+    const tailSel = document.getElementById(ids.tail);
+    headSel.innerHTML = opts;
+    tailSel.innerHTML = opts;
+    headSel.addEventListener('change', () => renderAttnPreview(scope));
+    tailSel.addEventListener('change', () => renderAttnPreview(scope));
+
     // 序列容器拖放
-    const zone = document.getElementById('attnSequence');
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    const zone = document.getElementById(ids.sequence);
+    zone.addEventListener('dragover', e => {
+        e.preventDefault(); zone.classList.add('drag-over');
+    });
     zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
     zone.addEventListener('drop', e => {
         e.preventDefault(); zone.classList.remove('drag-over');
         const name = e.dataTransfer.getData('text/plain');
-        if (name && (ATTENTION_INFO[name] || names.includes(name))) addToAttnSequence(name);
+        if (name && names.includes(name)) addToAttnSequence(scope, name);
     });
+
     // 启用开关
-    document.getElementById('useAttnBuilder').addEventListener('change', e => {
-        document.getElementById('attnBuilder').classList.toggle('hidden', !e.target.checked);
-        if (e.target.checked) renderAttnPreview();
+    document.getElementById(ids.toggle).addEventListener('change', e => {
+        document.getElementById(ids.box).classList.toggle('hidden', !e.target.checked);
+        if (e.target.checked) renderAttnPreview(scope);
     });
-    // 层数变化时刷新预览的循环/截断提示
-    document.getElementById('n_layers_text').addEventListener('input',
-        () => { if (isAttnBuilderOn()) renderAttnPreview(); });
+
+    // 层数变化 → 刷新循环填充/截断预览
+    if (ids.layers) {
+        const layersEl = document.getElementById(ids.layers);
+        if (layersEl) layersEl.addEventListener('input', () => {
+            if (isAttnBuilderOn(scope)) renderAttnPreview(scope);
+        });
+    }
+
+    // 清空按钮（作用域内 data-clear 标记）
+    const clearBtn = document.getElementById(ids.box).querySelector('[data-clear]');
+    if (clearBtn) clearBtn.addEventListener('click', () => clearAttnSequence(scope));
+
+    renderAttnSequence(scope);
 }
 
-function isAttnBuilderOn() {
-    const cb = document.getElementById('useAttnBuilder');
-    return cb && cb.checked;
+function isAttnBuilderOn(scope) {
+    const cb = document.getElementById(attnScopeIds(scope).toggle);
+    return !!(cb && cb.checked);
 }
 
-function addToAttnSequence(name) {
-    attnSeq.push(name);
-    renderAttnSequence();
+function addToAttnSequence(scope, name) {
+    ATTN_BUILDER_SCOPES[scope].seq.push(name);
+    renderAttnSequence(scope);
 }
 
-function removeAttnItem(el) {
-    const idx = parseInt(el.dataset.idx, 10);
-    attnSeq.splice(idx, 1);
-    renderAttnSequence();
+function removeAttnItem(scope, idx) {
+    ATTN_BUILDER_SCOPES[scope].seq.splice(idx, 1);
+    renderAttnSequence(scope);
 }
 
-function clearAttnSequence() {
-    attnSeq = [];
-    renderAttnSequence();
+function clearAttnSequence(scope) {
+    ATTN_BUILDER_SCOPES[scope].seq = [];
+    renderAttnSequence(scope);
 }
 
-function renderAttnSequence() {
-    const zone = document.getElementById('attnSequence');
-    if (!attnSeq.length) {
+function renderAttnSequence(scope) {
+    const st = ATTN_BUILDER_SCOPES[scope];
+    const zone = document.getElementById(attnScopeIds(scope).sequence);
+    if (!st.seq.length) {
         zone.innerHTML = '<span class="attn-seq-empty">拖拽积木到这里，或点击上方调色板添加</span>';
-        renderAttnPreview();
+        renderAttnPreview(scope);
         return;
     }
     zone.innerHTML = '';
-    attnSeq.forEach((name, i) => {
-        const chip = attnChip(name, 'attn-seq-item');
-        const wrap = document.createElement('span');
-        wrap.innerHTML = chip +
-            '<span class="attn-seq-remove" data-idx="' + i + '" onclick="removeAttnItem(this)">✕</span>' +
-            (i < attnSeq.length - 1 ? '<span style="color:var(--text-muted)">→</span>' : '');
-        const block = wrap.querySelector('.attn-block');
-        block.setAttribute('draggable', 'true');
+    st.seq.forEach((name, i) => {
+        const item = document.createElement('span');
+        item.style.cssText = 'display:inline-flex;align-items:center;';
+        item.innerHTML = attnChip(name, 'attn-seq-item') +
+            '<span class="attn-seq-remove" title="移除">✕</span>' +
+            (i < st.seq.length - 1
+                ? '<span style="color:var(--text-muted);margin:0 2px;">→</span>'
+                : '');
+        const block = item.querySelector('.attn-block');
         block.addEventListener('dragstart', e =>
-            e.dataTransfer.setData('application/x-attn-index', String(i)));
+            e.dataTransfer.setData('application/x-attn-' + scope, String(i)));
         block.addEventListener('dragover', e => e.preventDefault());
         block.addEventListener('drop', e => {
             e.stopPropagation(); e.preventDefault();
-            const from = parseInt(e.dataTransfer.getData('application/x-attn-index'), 10);
+            const from = parseInt(
+                e.dataTransfer.getData('application/x-attn-' + scope), 10);
             if (!isNaN(from)) {
-                const moved = attnSeq.splice(from, 1)[0];
-                attnSeq.splice(i, 0, moved);
-                renderAttnSequence();
+                const moved = st.seq.splice(from, 1)[0];
+                st.seq.splice(i, 0, moved);
+                renderAttnSequence(scope);
             }
         });
-        zone.appendChild(wrap.firstElementChild);
-        zone.appendChild(wrap.querySelector('.attn-seq-remove'));
-        if (i < attnSeq.length - 1) zone.appendChild(wrap.querySelector('span:last-child'));
+        item.querySelector('.attn-seq-remove').addEventListener(
+            'click', () => removeAttnItem(scope, i));
+        zone.appendChild(item);
     });
-    renderAttnPreview();
+    renderAttnPreview(scope);
 }
 
-// 预览：与后端 _resolve_attention_plan 完全同语义（循环填充/首尾覆盖/超限截断提醒）
-function renderAttnPreview() {
-    const box = document.getElementById('attnPlanPreview');
+// 预览：与后端 resolve_attention_plan 同语义（循环填充/首尾覆盖/超限截断提醒）
+function renderAttnPreview(scope) {
+    const box = document.getElementById(attnScopeIds(scope).preview);
     if (!box) return;
-    if (!attnSeq.length) {
-        box.textContent = '尚未搭建积木：将使用上方"统一注意力"。';
+    const st = ATTN_BUILDER_SCOPES[scope];
+    if (!st || !st.seq.length) {
+        box.textContent = '尚未搭建积木：将使用上方统一注意力。';
         return;
     }
-    const nLayers = Math.max(1, parseInt(
-        document.getElementById('n_layers_text').value || '6', 10));
-    const head = document.getElementById('planHead').value;
-    const tail = document.getElementById('planTail').value;
+    let nLayers = 4;
+    const layersId = attnScopeIds(scope).layers;
+    if (layersId) {
+        const el = document.getElementById(layersId);
+        if (el) nLayers = Math.max(1, parseInt(el.value || '4', 10));
+    }
+    const head = document.getElementById(attnScopeIds(scope).head).value;
+    const tail = document.getElementById(attnScopeIds(scope).tail).value;
 
     let warn = '';
-    if (attnSeq.length > nLayers) {
-        warn = '<span class="warn">⚠️ 搭建了 ' + attnSeq.length +
-               ' 块，超过模型层数 ' + nLayers + '，多余的将被自动截断</span><br>';
+    if (st.seq.length > nLayers) {
+        warn = '<span class="warn">⚠️ 搭建了 ' + st.seq.length +
+               ' 块，超过模型层数 ' + nLayers +
+               '，多余的将被自动截断</span><br>';
     }
-    const plan = Array.from({ length: nLayers }, (_, i) => attnSeq[i % attnSeq.length]);
+    const plan = Array.from({ length: nLayers },
+                            (_, i) => st.seq[i % st.seq.length]);
     if (head) plan[0] = head;
     if (tail) plan[nLayers - 1] = tail;
 
-    const rows = plan.map((a, i) =>
+    box.innerHTML = warn + plan.map((a, i) =>
         '第' + String(i + 1).padStart(2, ' ') + '层 → ' + a +
         (head && i === 0 ? '  ⭐首层特殊' : '') +
         (tail && i === nLayers - 1 ? '  🌙尾层特殊' : '')).join('<br>');
-    box.innerHTML = warn + rows;
 }
 
-// 收集搭建结果供 startTraining 使用
-function collectAttentionPlan() {
-    if (!isAttnBuilderOn() || !attnSeq.length) return null;
+// 收集搭建结果；未启用/未搭建返回 null（回退统一注意力）
+function collectAttentionPlan(scope) {
+    if (!isAttnBuilderOn(scope)) return null;
+    const st = ATTN_BUILDER_SCOPES[scope];
+    if (!st || !st.seq.length) return null;
     return {
-        sequence: attnSeq.slice(),
-        head: document.getElementById('planHead').value || null,
-        tail: document.getElementById('planTail').value || null,
+        sequence: st.seq.slice(),
+        head: document.getElementById(attnScopeIds(scope).head).value || null,
+        tail: document.getElementById(attnScopeIds(scope).tail).value || null,
     };
 }

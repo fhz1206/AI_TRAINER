@@ -21,6 +21,7 @@ from state import training_tasks
 from .common import update_task, build_loader, maybe_compile, fail_task  # noqa: F401
 from .image_cls import train_image_classification
 from .text_gen import train_text_model
+from .text_cls import train_text_classification
 from .diffusion import train_diffusion, train_diffusion_edit
 from .multimodal import train_multimodal
 
@@ -30,6 +31,7 @@ TRAIN_FUNCTIONS = {
     'image_vit': lambda uid, tid, mp, tp, tasks:
         train_image_classification('image_vit', uid, tid, mp, tp, tasks),
     'text_generation': train_text_model,
+    'text_classifier': train_text_classification,
     'image_diffusion': train_diffusion,
     'image_edit_diffusion': train_diffusion_edit,
     'multimodal_stream': train_multimodal,
@@ -37,7 +39,7 @@ TRAIN_FUNCTIONS = {
 
 # 前端分区 → 可选架构（积木式选择的数据源）
 TRAIN_TYPES = {
-    'llm': ['text_generation'],
+    'llm': ['text_generation', 'text_classifier'],
     'image': ['image_cnn', 'image_vit', 'image_diffusion', 'image_edit_diffusion'],
     'multimodal': ['multimodal_stream'],
 }

@@ -69,8 +69,9 @@ def _init_hand_models():
 # -------------------------- 本地测试代码模板接口 --------------------------
 _TEST_TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test_templates')
-_TEST_TEMPLATE_WHITELIST = ('image', 'image_vit', 'text', 'diffusion',
-                            'diffusion_edit', 'multimodal', 'head_mode')
+_TEST_TEMPLATE_WHITELIST = ('image', 'image_vit', 'text', 'text_cls',
+                            'diffusion', 'diffusion_edit', 'multimodal',
+                            'head_mode')
 
 
 @test_bp.route('/api/test_template/<name>')
@@ -104,6 +105,8 @@ def upload_test_data():
     # 原框架格式校验保留（扩展：ViT 同为 zip 数据集；编辑/多模态为单图）
     if framework in ('image', 'image_vit') and not file.filename.lower().endswith('.zip'):
         return jsonify({'status': 'error', 'message': '图片分类测试仅支持.zip格式'})
+    if framework == 'text_cls' and not file.filename.lower().endswith('.zip'):
+        return jsonify({'status': 'error', 'message': '语言分类测试仅支持.zip格式（顶层类别文件夹）'})
     if framework == 'text' and not (file.filename.lower().endswith('.txt') or file.filename.lower().endswith('.zip')):
         return jsonify({'status': 'error', 'message': '文本测试仅支持.txt或.zip格式'})
     # 单图类测试格式校验（手部/扩散编辑/多模态）
@@ -212,8 +215,9 @@ def run_test():
         # 原有image/text参数校验完全保留
         if not all([framework, model_name, test_code]):
             return jsonify({'status': 'error', 'message': '参数不完整，请检查模型和测试代码是否已选择'})
-        if framework in ('image', 'image_vit') and not test_data_path:
-            return jsonify({'status': 'error', 'message': '图片分类测试请先上传测试数据集'})
+        if framework in ('image', 'image_vit', 'text_cls') and not test_data_path:
+            return jsonify({'status': 'error',
+                            'message': '分类测试请先上传测试数据集'})
     # 模型校验（head_mode下跳过，使用内置模型）
     if framework != 'head_mode':
         model_path = f'models/{user_id}/{model_name}'
@@ -319,6 +323,7 @@ def list_user_models():
         'image': 'cnn',
         'image_vit': 'vit',
         'text': 'text',
+        'text_cls': 'text_cls',
         'diffusion': 'diffusion',
         'diffusion_edit': 'diffusion_edit',
         'multimodal': 'multimodal',
@@ -338,6 +343,8 @@ def list_user_models():
                 model_type = 'diffusion'
             elif f_lower.startswith('dif_edit_'):
                 model_type = 'diffusion_edit'
+            elif f_lower.startswith('text_cls_'):
+                model_type = 'text_cls'
             elif f_lower.startswith('mm_stream_'):
                 model_type = 'multimodal'
             elif f_lower.startswith('text_gen_'):

@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 
 from architectures.blocks import TransformerEncoderBlock
+from architectures.attention import resolve_attention_plan
 
 
 class ConvBlock(nn.Module):
@@ -95,7 +96,7 @@ class ViTModel(nn.Module):
 
     def __init__(self, image_size=224, patch_size=16, in_channels=3, num_classes=10,
                  d_model=256, n_layers=6, n_heads=8, d_ff=512, dropout=0.1,
-                 attention_type='flash'):
+                 attention_type='flash', attention_plan=None):
         super().__init__()
         if image_size % patch_size != 0:
             raise ValueError(f"image_size({image_size}) 必须能被 patch_size({patch_size}) 整除")
@@ -104,6 +105,14 @@ class ViTModel(nn.Module):
         self.num_patches = (image_size // patch_size) ** 2
         self.num_classes = num_classes
         self.attention_type = (attention_type or 'flash').lower()
+        # 逐层混合注意力计划（缺失时回退统一类型）
+        self.attention_plan = resolve_attention_plan(
+            attention_plan, n_layers, default=self.attention_type)
+        if len(set(self.attention_plan)) > 1:
+            print(f"[ViT] 混合注意力计划({n_layers}层): {self.attention_plan}")
+            self.attention_summary = '混合[' + '→'.join(self.attention_plan) + ']'
+        else:
+            self.attention_summary = self.attention_plan[0]
         self.d_model = d_model
 
         self.patch_embed = nn.Conv2d(in_channels, d_model,
@@ -114,8 +123,9 @@ class ViTModel(nn.Module):
 
         self.blocks = nn.ModuleList([
             TransformerEncoderBlock(d_model=d_model, n_heads=n_heads, d_ff=d_ff,
-                                    dropout=dropout, attn_name=self.attention_type)
-            for _ in range(n_layers)
+                                    dropout=dropout,
+                                    attn_name=self.attention_plan[i])
+            for i in range(n_layers)
         ])
         self.norm = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, num_classes)

@@ -13,6 +13,7 @@ from safetensors.torch import load_file, save_file
 
 from model_zoo.vision import SimpleResNet, ViTModel
 from model_zoo.text import TextTransformerModel
+from model_zoo.text_cls import TextClassifier
 from model_zoo.diffusion import DiffusionModel, DiffusionEditModel
 from model_zoo.multimodal import MultiModalSingleStream
 
@@ -111,9 +112,24 @@ def _rebuild_architecture(meta):
             d_ff=mp_.get('d_ff', 384),
             dropout=mp_.get('dropout', 0.1),
             attention_type=mp_.get('attention_type', 'flash'),
+            attention_plan=mp_.get('attention_plan'),
         )
     if mtype == 'text_generation':
         return TextTransformerModel(**_build_text_kwargs(mp_))
+    if mtype == 'text_classifier':
+        return TextClassifier(
+            vocab_size=mp_.get('vocab_size', 5000),
+            num_classes=mp_.get('num_classes', 2),
+            d_model=mp_.get('d_model', 128),
+            n_layers=mp_.get('n_layers', 4),
+            n_heads=mp_.get('n_heads', 4),
+            d_ff=mp_.get('d_ff', 256),
+            max_seq_len=mp_.get('max_seq_len', 64),
+            dropout=mp_.get('dropout', 0.1),
+            pad_token_id=mp_.get('pad_token_id', 0),
+            attention_type=mp_.get('attention_type', 'flash'),
+            attention_plan=mp_.get('attention_plan'),
+        )
     if mtype == 'image_diffusion':
         return DiffusionModel(
             image_size=mp_.get('image_size', 32),

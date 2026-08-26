@@ -1,0 +1,48 @@
+# 语言分类模型测试模板（字符级 Transformer 编码器，按类别文件夹评估）
+import os
+import torch
+from torch.utils.data import DataLoader
+from model import TextClassificationDataset
+from model_io import load_model
+
+# -------------------------- 可修改参数 --------------------------
+BATCH_SIZE = 32
+MAX_SEQ_LEN = 64
+# -----------------------------------------------------------------
+
+# 1. 加载模型（元数据自动重建编码器结构与注意力积木）
+print("正在加载语言分类模型...")
+model = load_model(model_path, map_location='cpu')
+model.eval()
+meta = getattr(model, '_metadata', {})
+print(f"✅ 模型加载成功，参数量: {sum(p.numel() for p in model.parameters()):,}")
+print(f"架构: {meta.get('architecture', 'TransformerEncoder')} | "
+      f"注意力: {meta.get('model_params', {}).get('attention_type', '?')}")
+
+# 2. 加载测试数据集（顶层子文件夹 = 类别，与训练一致）
+dataset = TextClassificationDataset(
+    test_data_path,
+    vocab_size=meta.get('model_params', {}).get('vocab_size', 5000),
+    max_seq_len=MAX_SEQ_LEN,
+    pad_token_id=0,
+)
+loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+class_names = list(dataset.classes.keys())
+print(f"测试集共 {len(dataset)} 条样本，{len(class_names)} 个类别: {class_names}")
+
+# 3. 逐批评估
+correct = 0
+total = 0
+with torch.no_grad():
+    for batch_idx, (ids, labels) in enumerate(loader):
+        outputs = model(ids)
+        preds = outputs.argmax(1)
+        correct += preds.eq(labels).sum().item()
+        total += labels.size(0)
+        print(f"批次 {batch_idx+1}/{len(loader)} | 累计正确 {correct}/{total}")
+
+accuracy = 100. * correct / max(total, 1)
+print("\n" + "=" * 60)
+print(f"总样本数: {total} | 正确数: {correct}")
+# 保留固定格式，方便后端解析指标
+print(f"准确率：{accuracy:.2f}%")
