@@ -362,6 +362,13 @@ def api_start_training():
         'use_moe': data.get('use_moe', False),
         'use_mla': data.get('use_mla', False),
     }
+    # MoE / MLA 可调参数（勾选启用后由前端传入；未传时训练器用默认值）
+    if data.get('moe_experts'):
+        model_params['moe_experts'] = max(2, int(data['moe_experts']))
+    if data.get('moe_top_k'):
+        model_params['moe_top_k'] = max(1, int(data['moe_top_k']))
+    if data.get('mla_dim'):
+        model_params['mla_dim'] = int(data['mla_dim'])
     # 新架构积木参数（按需透传，未传时训练器使用默认值）
     if data.get('attention_type'):
         model_params['attention_type'] = str(data['attention_type']).lower()

@@ -174,6 +174,7 @@ class TextDataset(Dataset):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.pad_token_id = pad_token_id
+        self.scan_interval = scan_interval
 
         texts = []
         print(f"[TextDataset] 开始扫描: {folder_path}")

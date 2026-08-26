@@ -614,7 +614,6 @@ async function startTraining() {
                 params.moe_top_k = parseInt(document.getElementById('moe_top_k').value);
             }
             if (params.use_mla) {
-                params.mla_heads = parseInt(document.getElementById('mla_heads').value);
                 params.mla_dim = parseInt(document.getElementById('mla_dim').value);
             }
         }
@@ -903,7 +902,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // MoE/MLA复选框联动参数显示
     document.getElementById('use_moe').addEventListener('change', function() {
-        if (this.checked && currentType === 'text') {
+        if (this.checked && currentType === 'llm') {
             document.getElementById('moeParams').classList.remove('hidden');
         } else {
             document.getElementById('moeParams').classList.add('hidden');
@@ -911,7 +910,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.getElementById('use_mla').addEventListener('change', function() {
-        if (this.checked && currentType === 'text') {
+        if (this.checked && currentType === 'llm') {
             document.getElementById('mlaParams').classList.remove('hidden');
         } else {
             document.getElementById('mlaParams').classList.add('hidden');
