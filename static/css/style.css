@@ -1229,3 +1229,44 @@ input[type="radio"] {
 button {
     color: inherit;
 }
+
+/* ==================== 搭建器控件样式补齐（配色对齐测试页 form-select） ==================== */
+/* 积木搭建器内的首层/尾层下拉框：此前无任何样式，按浏览器默认白底渲染 */
+.attn-builder-row select {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.attn-builder-row select:hover,
+.attn-builder-row select:focus {
+    border-color: var(--border-focus);
+}
+.attn-builder-row select:focus {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+/* 清空按钮（注意力积木序列）：此前 .btn-sm 无定义，呈浏览器默认浅色样式 */
+.btn-sm {
+    padding: 5px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+.btn-sm:hover {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}

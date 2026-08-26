@@ -68,7 +68,7 @@
         </div>
 
         <!-- 二级架构条：随上方所选任务切换（缩进表示层级） -->
-        <div class="tabs-container hidden" id="clsArchTabs" style="margin-left:30px;width:fit-content;">
+        <div class="tabs-container hidden" id="clsArchTabs">
             <button type="button" class="tab-btn active" data-cls-arch="cnn" onclick="switchClsArch('cnn')">
                 <span>🧱</span> CNN 卷积网络
             </button>
@@ -76,7 +76,7 @@
                 <span>🔷</span> ViT 视觉Transformer
             </button>
         </div>
-        <div class="tabs-container hidden" id="genArchTabs" style="margin-left:30px;width:fit-content;">
+        <div class="tabs-container hidden" id="genArchTabs">
             <button type="button" class="tab-btn active" data-gen-sub="ddpm" onclick="switchGenSub('ddpm')">
                 <span>🌀</span> DDPM 标准扩散
             </button>
@@ -84,7 +84,7 @@
                 <span>⚡</span> DDIM 轻量快速
             </button>
         </div>
-        <div class="tabs-container hidden" id="editArchTabs" style="margin-left:30px;width:fit-content;">
+        <div class="tabs-container hidden" id="editArchTabs">
             <button type="button" class="tab-btn active" data-edit-sub="std" onclick="switchEditSub('std')">
                 <span>🎯</span> 编辑适配 · 标准
             </button>
