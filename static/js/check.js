@@ -347,6 +347,12 @@ else:
                             `<option value="${m.name}">${m.name} (${m.size} | ${TYPE_LABEL[m.type] || m.type})</option>`
                         ).join('');
                     }
+                    // 同步可见的"当前模型"信息行（下拉框已在兼容层中隐藏）
+                    const info = document.getElementById('modelInfoLine');
+                    if (info) {
+                        const opt = select.selectedOptions && select.selectedOptions[0];
+                        info.textContent = opt ? ('当前模型：' + opt.text) : '';
+                    }
                 } else {
                     select.innerHTML = '<option value="">加载失败</option>';
                 }
@@ -639,3 +645,14 @@ else:
                 alert('退出失败: ' + e.message);
             }
         }
+
+// 框架标签条切换（与训练页同款交互）：实际状态仍由兼容层的 frameworkSelect 驱动
+function switchFrameworkTab(fw) {
+    document.querySelectorAll('#frameworkTabs .tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.fw === fw);
+    });
+    const sel = document.getElementById('frameworkSelect');
+    if (!sel || sel.value === fw) return;
+    sel.value = fw;
+    onFrameworkChange();   // 复用原有联动：模板切换/上传提示/模型列表
+}

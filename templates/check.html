@@ -14,48 +14,73 @@
 <body>
     <canvas id="particles-canvas"></canvas>
     <div class="app-wrapper" style="position:relative;z-index:1;">
-        <!-- 头部（和ITPP.html一致） -->
+        <!-- 顶部导航栏（与训练页一致） -->
+        <div class="user-info" style="position:static;display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:12px 0 0;flex-wrap:wrap;">
+            <span class="username" id="headerUsername">{{ username }}</span>
+            <a href="/home" class="btn-test" title="首页">🏠 首页</a>
+            <a href="/train" class="btn-test" title="训练面板">🏠 训练</a>
+            <a href="/study" class="btn-test" title="AI基础学习">📖 学习</a>
+            <a href="/profile" class="btn-test" title="账号主页">👤 账号</a>
+            <button class="btn-logout" onclick="handleLogout()" title="退出登录">
+                🚪 退出
+            </button>
+        </div>
+        <!-- 头部（与训练页同款：纯标题） -->
         <header class="app-header">
             <div class="header-glow"></div>
             <h1>🧪 模型测试平台</h1>
-            <p class="subtitle">选择模型和测试数据，自定义测试逻辑验证效果</p>
-            <div class="user-info">
-                <span class="username" id="headerUsername">{{ username }}</span>
-                <a href="/home" class="btn-test" title="首页">🏠 首页</a>
-                <a href="/train" class="btn-test" title="训练面板">🏠 训练</a>
-                <a href="/study" class="btn-test" title="AI基础学习">📖 学习</a>
-                <a href="/profile" class="btn-test" title="账号主页">👤 账号</a>
-                <button class="btn-logout" onclick="handleLogout()" title="退出登录">
-                    🚪 退出
-                </button>
-            </div>
+            <p class="subtitle">选择模型框架，上传测试数据一键验证效果</p>
         </header>
 
-        <!-- 顶部控制栏：框架选择+模型选择 -->
-        <div class="card" style="margin-top: 20px;">
-            <div class="form-group" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
-                <div>
-                    <label style="margin-right: 8px;">模型框架：</label>
-                    <!-- 新增head_mode框架选项 -->
-                    <select id="frameworkSelect" class="form-select" onchange="onFrameworkChange()">
-                        <option value="image">CNN 图片分类模型</option>
-                        <option value="image_vit">ViT 图像分类模型</option>
-                        <option value="text">Transformer 文本生成模型</option>
-                        <option value="text_cls">语言分类模型</option>
-                        <option value="diffusion">扩散图像生成模型</option>
-                        <option value="diffusion_edit">扩散图像编辑模型</option>
-                        <option value="multimodal">多模态图文模型</option>
-                        <option value="head_mode">✋ 手部关键点检测</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="margin-right: 8px;">选择模型：</label>
-                    <select id="modelSelect" class="form-select">
-                        <option value="">请先选择框架</option>
-                    </select>
-                    <button class="btn-secondary" style="padding: 4px 12px; margin-left: 8px; font-size: 13px;" onclick="loadModels()">🔄 刷新</button>
-                </div>
-            </div>
+        <!-- 框架选择标签条（与训练页同款交互） -->
+        <div class="tabs-container" role="tablist" id="frameworkTabs">
+            <button type="button" class="tab-btn active" data-fw="image" onclick="switchFrameworkTab('image')">
+                <span>🖼️</span> CNN 分类
+            </button>
+            <button type="button" class="tab-btn" data-fw="image_vit" onclick="switchFrameworkTab('image_vit')">
+                <span>🔷</span> ViT 分类
+            </button>
+            <button type="button" class="tab-btn" data-fw="text" onclick="switchFrameworkTab('text')">
+                <span>📝</span> 文本生成
+            </button>
+            <button type="button" class="tab-btn" data-fw="text_cls" onclick="switchFrameworkTab('text_cls')">
+                <span>🏷️</span> 语言分类
+            </button>
+            <button type="button" class="tab-btn" data-fw="diffusion" onclick="switchFrameworkTab('diffusion')">
+                <span>🎨</span> 图像生成
+            </button>
+            <button type="button" class="tab-btn" data-fw="diffusion_edit" onclick="switchFrameworkTab('diffusion_edit')">
+                <span>🖌️</span> 图像编辑
+            </button>
+            <button type="button" class="tab-btn" data-fw="multimodal" onclick="switchFrameworkTab('multimodal')">
+                <span>🧩</span> 多模态
+            </button>
+            <button type="button" class="tab-btn" data-fw="head_mode" onclick="switchFrameworkTab('head_mode')">
+                <span>✋</span> 手部检测
+            </button>
+        </div>
+
+        <!-- 当前选中模型信息行 -->
+        <div id="modelInfoLine" style="margin:-12px 0 16px;font-size:13px;color:var(--text-secondary);min-height:18px;"></div>
+
+        <!-- 兼容层：保留原下拉与刷新控件（JS 钩子不变），仅视觉隐藏 -->
+        <div aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;">
+            <label>模型框架：</label>
+            <select id="frameworkSelect" class="form-select" onchange="onFrameworkChange()">
+                <option value="image">CNN 图片分类模型</option>
+                <option value="image_vit">ViT 图像分类模型</option>
+                <option value="text">Transformer 文本生成模型</option>
+                <option value="text_cls">语言分类模型</option>
+                <option value="diffusion">扩散图像生成模型</option>
+                <option value="diffusion_edit">扩散图像编辑模型</option>
+                <option value="multimodal">多模态图文模型</option>
+                <option value="head_mode">✋ 手部关键点检测</option>
+            </select>
+            <label>选择模型：</label>
+            <select id="modelSelect" class="form-select">
+                <option value="">请先选择框架</option>
+            </select>
+            <button class="btn-secondary" onclick="loadModels()">🔄 刷新</button>
         </div>
 
         <!-- 主体布局：左代码+上传，右结果 -->
