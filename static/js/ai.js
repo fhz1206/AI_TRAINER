@@ -764,7 +764,7 @@ function initLossDemo() {
 
     let lr = 0.01, noise = 0.05;
     let epochs = 0, maxEpochs = 1000;
-    let lossHistory = [];
+    let lossHistory = [5.0];   // 预置初始损失点：未开跑时坐标系与指标即有内容（epoch=0）
     let animId = null;
     let runToken = 0;          // 代际令牌：重置后旧动画循环自行退出，杜绝多循环并发
     let pendingTimer = null;
@@ -795,6 +795,7 @@ function initLossDemo() {
         const pad = { top: 20, bottom: 30, left: 50, right: 20 };
         const chartW = w - pad.left - pad.right;
         const chartH = h - pad.top - pad.bottom;
+        const yMax = computeYMax();   // 纵轴刻度按数据动态扩展
 
         // 网格
         ctx.strokeStyle = 'rgba(255,255,255,0.04)';
@@ -809,7 +810,7 @@ function initLossDemo() {
         ctx.font = '11px Inter, sans-serif';
         ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
         for (let i = 0; i <= 5; i++) {
-            ctx.fillText((5 - i).toFixed(1), pad.left - 8, pad.top + (chartH / 5) * i);
+            ctx.fillText((yMax * (1 - i / 5)).toFixed(1), pad.left - 8, pad.top + (chartH / 5) * i);
         }
         // X轴
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -833,7 +834,7 @@ function initLossDemo() {
         ctx.moveTo(pad.left + chartW, pad.top + chartH);
         for (let i = lossHistory.length - 1; i >= 0; i--) {
             const x = pad.left + (i / maxEpochs) * chartW;
-            const y = pad.top + (1 - lossHistory[i] / 5) * chartH;
+            const y = pad.top + (1 - lossHistory[i] / yMax) * chartH;
             ctx.lineTo(x, y);
         }
         ctx.lineTo(pad.left, pad.top + chartH);
@@ -848,7 +849,7 @@ function initLossDemo() {
         ctx.beginPath();
         lossHistory.forEach((loss, i) => {
             const x = pad.left + (i / maxEpochs) * chartW;
-            const y = pad.top + (1 - loss / 5) * chartH;
+            const y = pad.top + (1 - loss / yMax) * chartH;
             i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         });
         ctx.strokeStyle = '#ef4444';
@@ -859,7 +860,7 @@ function initLossDemo() {
         ctx.beginPath();
         lossHistory.forEach((loss, i) => {
             const x = pad.left + (i / maxEpochs) * chartW;
-            const y = pad.top + (1 - loss / 5) * chartH;
+            const y = pad.top + (1 - loss / yMax) * chartH;
             i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         });
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.2)';
@@ -877,13 +878,22 @@ function initLossDemo() {
             ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; ctx.lineWidth = 2; ctx.stroke();
         }
 
-        // 指标
-        if (lossHistory.length > 0) {
-            const lastLoss = lossHistory[lossHistory.length - 1];
-            currentLossEl.textContent = lastLoss.toFixed(4);
-            currentPplEl.textContent = Math.exp(lastLoss).toFixed(2);
-            epochCountEl.textContent = lossHistory.length;
-        }
+    }
+
+    // 指标每轮都刷新（与重绘节流解耦）；轮数用 epochs 计数器——
+    // lossHistory 含预置的初始损失点，用其长度会多算 1 且未开跑就显示"1"
+    function updateMetrics() {
+        if (!lossHistory.length) return;
+        const lastLoss = lossHistory[lossHistory.length - 1];
+        currentLossEl.textContent = lastLoss.toFixed(4);
+        currentPplEl.textContent = Math.exp(Math.min(lastLoss, 20)).toFixed(2);
+        epochCountEl.textContent = String(epochs);
+    }
+
+    // 动态纵轴：高噪声下损失可能超过初始刻度顶值 5，
+    // 按实际数据扩展刻度（含 15% 余量），避免曲线冲出绘图区
+    function computeYMax() {
+        return Math.max(5, ...lossHistory.map(v => v * 1.15));
     }
 
     function trainStep(token) {
@@ -895,6 +905,7 @@ function initLossDemo() {
         const prevLoss = lossHistory.length > 0 ? lossHistory[lossHistory.length - 1] : 5.0;
         lossHistory.push(simulateLossStep(prevLoss));
         epochs++;
+        updateMetrics();   // 数字指标每轮都动（不随画布重绘节流）
         // 每 5 轮（含最后一轮）才做一次全量重绘：1000 轮的重绘次数降为约 1/5
         if (epochs % 5 === 0 || epochs >= maxEpochs) {
             const { w, h } = setupCanvas();
@@ -911,11 +922,24 @@ function initLossDemo() {
         lossHistory = [5.0];
         const { w, h } = setupCanvas();
         drawLossChart(w, h);
+        updateMetrics();
+        scheduleStart();   // 重置总是重新调度训练（不受懒启动一次性守卫限制）
+    }
+
+    // 首次滚入视口才开始训练动画：
+    // 页面一打开就在后台跑满 1000 轮，用户滚动到此处时只剩静态成品
+    function scheduleStart() {
         const token = runToken;
         pendingTimer = setTimeout(() => {
             pendingTimer = null;
             trainStep(token);
         }, 300);
+    }
+    let started = false;
+    function startOnce() {
+        if (started) return;   // 仅约束"滚入视口自动触发"，不拦重置按钮
+        started = true;
+        scheduleStart();
     }
 
     const fmtLr = v => (v >= 0.001 ? String(+v.toFixed(6)) : v.toExponential(0));
@@ -929,7 +953,26 @@ function initLossDemo() {
     });
     resetBtn.addEventListener('click', resetTraining);
 
-    setTimeout(resetTraining, 200);
+    // 初始仅绘制坐标系与起始点；首次滚入视口才开始演示
+    (() => {
+        const { w, h } = setupCanvas();
+        drawLossChart(w, h);
+        updateMetrics();
+    })();
+    const lossSection = canvas.closest('section');
+    if ('IntersectionObserver' in window && lossSection) {
+        const io = new IntersectionObserver((entries) => {
+            entries.forEach(en => {
+                if (en.isIntersecting) {
+                    io.disconnect();
+                    startOnce();
+                }
+            });
+        }, { threshold: 0 });
+        io.observe(lossSection);
+    } else {
+        startOnce();
+    }
     window.addEventListener('resize', () => {
         if (lossHistory.length > 0) { const { w, h } = setupCanvas(); drawLossChart(w, h); }
     });
